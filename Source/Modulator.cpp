@@ -52,7 +52,9 @@ void Modulator::generateModulationValues(const ShapeGraph* shapeGraph) {
             x = (1-alpha)*x0 + alpha*x2;
             y = y0*L0(x, x0, x1, x2) + y1*L1(x, x0, x1, x2) + y2*L2(x, x0, x1, x2);
             //normalize y
-            modulationValues[i * segmentResolution + t] = y;
+            int index = juce::jlimit(0, resolution - 1, static_cast<int>(i * segmentResolution + t));
+            modulationValues[index] = y;
+            //modulationValues[i * segmentResolution + t] = y;
         }
     }
 }

@@ -84,8 +84,8 @@ void ShapeGraph::moveNode(int index, juce::Point<float> position) {
         if(x > tempRightBound) x = tempRightBound;
         
         nodes[index]->rect.setPosition(x, y);
+        updateEdgesAroundNode(index);
     }
-    updateEdgesAroundNode(index);
 }
 
 

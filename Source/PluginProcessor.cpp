@@ -163,9 +163,12 @@ void RectanglesAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
         {
             auto* channelData = buffer.getWritePointer (channel);
             for (int sample = 0; sample < buffer.getNumSamples(); ++sample) {
-                whiteNoise = random.nextFloat() * 2.0f * gain - gain;
+                /*whiteNoise = random.nextFloat() * 2.0f * gain - gain;
                 modulatorValue = modulator.getModulationValue(lfoPhase);
-                channelData[sample] = whiteNoise*modulatorValue;
+                channelData[sample] = whiteNoise*modulatorValue;*/
+                
+                modulatorValue = modulator.getModulationValue(lfoPhase);
+                channelData[sample] = channelData[sample] * modulatorValue;
                 
                 //increment phase
                 lfoPhase += delta_f;
