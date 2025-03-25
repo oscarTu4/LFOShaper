@@ -60,7 +60,7 @@ void Modulator::generateModulationValues(const ShapeGraph* shapeGraph) {
             (*newValues)[index] = y;
         }
     }
-    modulationValues.store(newValues);
+    std::atomic_store(&modulationValues, newValues);
 }
 
 float Modulator::L0(float x, float x0, float x1, float x2) {
@@ -77,7 +77,7 @@ float Modulator::L2(float x, float x0, float x1, float x2) {
 
 ///get the modulated value at phase point x on the curve
 float Modulator::getModulationValue(float phase)    {
-    auto values = modulationValues.load();
+    auto values = std::atomic_load(&modulationValues);
         if (!values || values->empty())
             return 0.0f;
 

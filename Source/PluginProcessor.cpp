@@ -9,6 +9,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 #include "Modulator.h"
+#include <optional>
 
 //==============================================================================
 RectanglesAudioProcessor::RectanglesAudioProcessor()
@@ -146,12 +147,7 @@ void RectanglesAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
         buffer.clear (i, 0, buffer.getNumSamples());
 
-    // This is the place where you'd normally do the guts of your plugin's
-    // audio processing...
-    // Make sure to reset the state if your inner loop is processing
-    // the samples and the outer loop is handling the channels.
-    // Alternatively, you can process the samples with the channels
-    // interleaved by keeping the same state.
+    updatePositionInfo();
     float delta_f = lfoRate / sampleRate;
     
     float lfoPhase = phase;
@@ -201,6 +197,19 @@ void RectanglesAudioProcessor::setStateInformation (const void* data, int sizeIn
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
     return new RectanglesAudioProcessor();
+}
+
+void RectanglesAudioProcessor::updatePositionInfo() {
+    if(auto* playHead = getPlayHead()) {
+        if(auto info = playHead->getPosition()) {
+            positionInfo = *info;
+        }
+    }
+}
+
+double RectanglesAudioProcessor::getBpm() {
+    juce::Optional<double> bpm = positionInfo.getBpm();
+    return bpm ? *bpm : 120.0;
 }
 
 void RectanglesAudioProcessor::setLfoRate(float rate)   {

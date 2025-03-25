@@ -17,19 +17,24 @@ RectanglesAudioProcessorEditor::RectanglesAudioProcessorEditor (RectanglesAudioP
 {
     
     lfoRateSlider.setSliderStyle(juce::Slider::SliderStyle::RotaryVerticalDrag);
-    lfoRateSlider.setRange(0.01, 5, 0.01);
+    lfoRateSlider.setRange(0.125, 8.0, 0.001);
     lfoRateSlider.setColour(juce::Slider::rotarySliderFillColourId, juce::Colours::orange);
-    lfoRateSlider.setTextBoxStyle(juce::Slider::TextBoxBelow, true, 100, 20);
+    lfoRateSlider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 100, 20); // false = no outline
+    lfoRateSlider.setColour(juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
     lfoRateSlider.setHasFocusOutline(true);
-    lfoRateSlider.setTextValueSuffix("Hz");
+    lfoRateSlider.textFromValueFunction = [](double value) {
+        return juce::String(value, 3) + " Hz";
+    };
     lfoRateSlider.setColour(juce::Slider::thumbColourId, juce::Colours::transparentBlack);
     lfoRateSlider.setValue(1);
+    lastUnsyncedRate = 1;
     lfoRateSlider.onValueChange = [this] {
         lfoRateSliderValueChanged();
     };
     addAndMakeVisible(lfoRateSlider);
     
     syncButton.setButtonText("Sync");
+    syncButton.onClick = [this] { syncButtonClicked(); };
     addAndMakeVisible(syncButton);
     
     setSize (600, 400);
@@ -158,14 +163,73 @@ void RectanglesAudioProcessorEditor::mouseUp(const juce::MouseEvent& event) {
 
 void RectanglesAudioProcessorEditor::lfoRateSliderValueChanged() {
     if(!lfoChangePending) {
-        startTimer(100);
-        lfoChangePending = true;
+        //startTimer(100);
+        //lfoChangePending = true;
+        if(!syncButton.getToggleState()) {
+            audioProcessor.setLfoRate(lfoRateSlider.getValue());
+            lastUnsyncedRate = lfoRateSlider.getValue();
+        } else {
+            double value = lfoRateSlider.getValue();
+            auto it = std::min_element(rhythmValues.begin(), rhythmValues.end(),
+                                       [=](double a, double b) {
+                return std::abs(a - value) < std::abs(b - value);
+            });
+            lastSyncedRate = *it;
+            
+            if (it != rhythmValues.end())
+                lfoRateSlider.setValue(*it, juce::dontSendNotification);
+        }
     }
 }
 
+void RectanglesAudioProcessorEditor::syncButtonClicked() {
+    if (syncButton.getToggleState()) {
+        if(lastSyncedRate != 0) {
+            lfoRateSlider.setValue(lastSyncedRate);
+        } else {
+            float bpm = audioProcessor.getBpm();
+            double lfoRate = 60.0 / bpm;
+            // Snap to nearest rhythm value
+            auto it = std::min_element(rhythmValues.begin(), rhythmValues.end(),
+                                       [=](double a, double b) {
+                return std::abs(a - lfoRate) < std::abs(b - lfoRate);
+            });
+            
+            if (it != rhythmValues.end()) {
+                lastSyncedRate = *it;
+                lfoRateSlider.setValue(*it);
+            }
+        }
+        
+        audioProcessor.setLfoRate(lfoRateSlider.getValue());
+        
+        // Set text to rhythm labels like "1/4"
+        lfoRateSlider.textFromValueFunction = [this](double value) -> juce::String {
+            juce::String suffix = " Bars";
+            for (size_t i = 0; i < rhythmValues.size(); ++i)
+                if (std::abs(value - rhythmValues[i]) < 0.001)  {
+                    if(i == 1) suffix = " Bar";
+                    else suffix = " Bars";
+                    return rhythmLabels[(int)i] + suffix;
+                }
+            return juce::String(value, 2);
+        };
+    }
+    else {
+        // Restore last free rate and "Hz" suffix
+        lfoRateSlider.setValue(lastUnsyncedRate);
+        audioProcessor.setLfoRate(lfoRateSlider.getValue());
+        
+        lfoRateSlider.textFromValueFunction = [](double value) {
+            return juce::String(value, 2) + " Hz";
+        };
+    }
+    lfoRateSlider.updateText();
+}
+
+
 void RectanglesAudioProcessorEditor::timerCallback() {
     if(lfoChangePending) {
-        audioProcessor.setLfoRate(lfoRateSlider.getValue());
         lfoChangePending = false;
         stopTimer();
     }

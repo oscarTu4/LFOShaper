@@ -55,6 +55,9 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
     
+    void updatePositionInfo();
+    double getBpm();
+    
     void setLfoRate(float rate);
     void updateLfoShape(const ShapeGraph& shapeGraph);
     
@@ -63,6 +66,8 @@ private:
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (RectanglesAudioProcessor)
 
+    juce::AudioPlayHead::PositionInfo positionInfo;
+    
     juce::Random random;
     std::vector<std::pair<float, float>> lfoShape;
     
