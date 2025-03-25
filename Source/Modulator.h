@@ -20,8 +20,8 @@ class Modulator {
 private:
     
     int resolution;
-    std::vector<float> modulationValues;
-    juce::LagrangeInterpolator interpolator;
+    //std::vector<float> modulationValues;
+    std::atomic<std::shared_ptr<std::vector<float>>> modulationValues;
     
     float L0(float x, float x0, float x1, float x2);
     float L1(float x, float x0, float x1, float x2);

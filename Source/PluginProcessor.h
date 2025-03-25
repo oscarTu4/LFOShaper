@@ -13,10 +13,6 @@
 #include "ShapeGraph.h"
 
 //==============================================================================
-/**
-*/
-
-enum NoiseState {Playing = 0, Stopped = 1};
 
 
 class RectanglesAudioProcessor  : public juce::AudioProcessor
@@ -59,9 +55,6 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
     
-    NoiseState getState();
-    void changeState(NoiseState newState);
-    
     void setLfoRate(float rate);
     void updateLfoShape(const ShapeGraph& shapeGraph);
     
@@ -71,7 +64,6 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (RectanglesAudioProcessor)
 
     juce::Random random;
-    NoiseState state;
     std::vector<std::pair<float, float>> lfoShape;
     
     float sampleRate;

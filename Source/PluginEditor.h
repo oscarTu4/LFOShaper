@@ -31,14 +31,16 @@ public:
 
 private:
     
+    int paintCounter = 0;
+    
     ShapeGraph shapeGraph;
     
     juce::Point<float> draggedShapeOffset;
     
     RectanglesAudioProcessor& audioProcessor;
     
-    juce::TextButton noiseButton;
     juce::Slider lfoRateSlider;
+    juce::ToggleButton syncButton;
     
     bool lfoChangePending = false;
     bool mouseDragPending = false;

@@ -13,14 +13,17 @@
 
 Modulator::Modulator() {
     resolution = 256;
-    modulationValues.resize(resolution, 0.0f);
+    //modulationValues.resize(resolution, 0.0f);
+    modulationValues = std::make_shared<std::vector<float>>(resolution, 1.0f); // safe default
 }
 
 void Modulator::generateModulationValues(const ShapeGraph* shapeGraph) {
     if(shapeGraph == nullptr) return;
     ///generate a modulation curve from the ShapeGraph data
-    modulationValues.clear();
-    modulationValues.resize(resolution, 0.0f);
+    
+    auto newValues = std::make_shared<std::vector<float>>(resolution, 0.0f);
+    //modulationValues.clear();
+    //modulationValues.resize(resolution, 0.0f);
     juce::Rectangle<float> rect1;
     juce::Rectangle<float> rect2;
     juce::Rectangle<float> rect3;
@@ -53,10 +56,11 @@ void Modulator::generateModulationValues(const ShapeGraph* shapeGraph) {
             y = y0*L0(x, x0, x1, x2) + y1*L1(x, x0, x1, x2) + y2*L2(x, x0, x1, x2);
             //normalize y
             int index = juce::jlimit(0, resolution - 1, static_cast<int>(i * segmentResolution + t));
-            modulationValues[index] = y;
-            //modulationValues[i * segmentResolution + t] = y;
+            //modulationValues[index] = y;
+            (*newValues)[index] = y;
         }
     }
+    modulationValues.store(newValues);
 }
 
 float Modulator::L0(float x, float x0, float x1, float x2) {
@@ -73,8 +77,10 @@ float Modulator::L2(float x, float x0, float x1, float x2) {
 
 ///get the modulated value at phase point x on the curve
 float Modulator::getModulationValue(float phase)    {
-    //std::cout << "Interpolating value at " << static_cast<int>(phase * resolution) % resolution << std::endl;
-    float outp = modulationValues[static_cast<int>(phase * resolution) % resolution];
-    //std::cout << "Interpolated Value: " << outp << std::endl;
-    return outp;
+    auto values = modulationValues.load();
+        if (!values || values->empty())
+            return 0.0f;
+
+        int index = static_cast<int>(phase * resolution) % resolution;
+        return (*values)[index];
 }

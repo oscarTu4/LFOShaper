@@ -15,9 +15,6 @@
 RectanglesAudioProcessorEditor::RectanglesAudioProcessorEditor (RectanglesAudioProcessor& p)
     : AudioProcessorEditor(p), audioProcessor(p)
 {
-    noiseButton.setButtonText("Start Noise");
-    noiseButton.onClick = [this] {noiseButtonClicked(); };
-    addAndMakeVisible(noiseButton);
     
     lfoRateSlider.setSliderStyle(juce::Slider::SliderStyle::RotaryVerticalDrag);
     lfoRateSlider.setRange(0.01, 5, 0.01);
@@ -31,6 +28,9 @@ RectanglesAudioProcessorEditor::RectanglesAudioProcessorEditor (RectanglesAudioP
         lfoRateSliderValueChanged();
     };
     addAndMakeVisible(lfoRateSlider);
+    
+    syncButton.setButtonText("Sync");
+    addAndMakeVisible(syncButton);
     
     setSize (600, 400);
     
@@ -57,6 +57,9 @@ void RectanglesAudioProcessorEditor::paint (juce::Graphics& g)
     
     //draw all rectangles
     shapeGraph.paint(g);
+    
+    //paintCounter++;
+    //std::cout << paintCounter << std::endl;
 }
 
 void RectanglesAudioProcessorEditor::resized()
@@ -70,10 +73,11 @@ void RectanglesAudioProcessorEditor::resized()
     shapeGraph.setBottomBound(shapeGraph.getTopBound()+shapeGraph.getHeight());
     
     shapeGraph.resizeNodeLayout();
-    repaint();
+    lfoRateSlider.setBounds(getWidth()/2, getHeight()-100, 100, 80);
+    //place syncButton right next to lfoRateSlider
+    syncButton.setBounds(lfoRateSlider.getX()+lfoRateSlider.getWidth(), lfoRateSlider.getY(), 80, 80);
     
-    noiseButton.setBounds(getWidth()/2-100, getHeight()-50, 100, 30);
-    lfoRateSlider.setBounds(noiseButton.getX()+noiseButton.getWidth()+10, getHeight()-100, 100, 80);
+    repaint();
     
     audioProcessor.updateLfoShape(shapeGraph);
 }
@@ -150,18 +154,6 @@ void RectanglesAudioProcessorEditor::mouseUp(const juce::MouseEvent& event) {
     //only do repaint() here for efficiency?
     //repaint();
     shapeGraph.clearSelection();
-}
-
-void RectanglesAudioProcessorEditor::noiseButtonClicked() {
-    NoiseState state = audioProcessor.getState();
-    if (state == Playing) {
-        noiseButton.setButtonText("Start Noise");
-        audioProcessor.changeState(Stopped);
-    }
-    if(state == Stopped) {
-        noiseButton.setButtonText("Stop Noise");
-        audioProcessor.changeState(Playing);
-    }
 }
 
 void RectanglesAudioProcessorEditor::lfoRateSliderValueChanged() {
