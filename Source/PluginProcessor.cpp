@@ -10,18 +10,38 @@
 #include "PluginEditor.h"
 #include "Modulator.h"
 #include <optional>
+#include <juce_data_structures/juce_data_structures.h>
 
 //==============================================================================
 RectanglesAudioProcessor::RectanglesAudioProcessor()
 #ifndef JucePlugin_PreferredChannelConfigurations
-     : AudioProcessor (BusesProperties()
+     :  AudioProcessor (BusesProperties()
                      #if ! JucePlugin_IsMidiEffect
                       #if ! JucePlugin_IsSynth
                        .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
                       #endif
                        .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
                      #endif
-                       )
+                       ), parameters (*this, nullptr, "PARAMETERS",
+                                      [] {
+                                          using namespace juce;
+                                          AudioProcessorValueTreeState::ParameterLayout layout;
+
+                                          layout.add(std::make_unique<AudioParameterFloat>(
+                                              ParameterID{"lfoRate", 1},      // ✅ version hint = 1
+                                              "LFO Rate",
+                                              NormalisableRange<float>(0.125f, 8.0f, 0.001f),
+                                              1.0f
+                                          ));
+
+                                          layout.add(std::make_unique<AudioParameterBool>(
+                                              ParameterID{"sync", 1},         // ✅ version hint = 1
+                                              "Sync",
+                                              false
+                                          ));
+
+                                          return layout;
+                                      }())
 #endif
 {
 }
@@ -70,8 +90,7 @@ double RectanglesAudioProcessor::getTailLengthSeconds() const
 
 int RectanglesAudioProcessor::getNumPrograms()
 {
-    return 1;   // NB: some hosts don't cope very well if you tell them there are 0 programs,
-                // so this should be at least 1, even if you're not really implementing programs.
+    return 1;
 }
 
 int RectanglesAudioProcessor::getCurrentProgram()
@@ -101,8 +120,6 @@ void RectanglesAudioProcessor::prepareToPlay (double sampleRate, int samplesPerB
 
 void RectanglesAudioProcessor::releaseResources()
 {
-    // When playback stops, you can use this as an opportunity to free up any
-    // spare memory, etc.
 }
 
 #ifndef JucePlugin_PreferredChannelConfigurations
@@ -112,15 +129,10 @@ bool RectanglesAudioProcessor::isBusesLayoutSupported (const BusesLayout& layout
     juce::ignoreUnused (layouts);
     return true;
   #else
-    // This is the place where you check if the layout is supported.
-    // In this template code we only support mono or stereo.
-    // Some plugin hosts, such as certain GarageBand versions, will only
-    // load plugins that support stereo bus layouts.
     if (layouts.getMainOutputChannelSet() != juce::AudioChannelSet::mono()
      && layouts.getMainOutputChannelSet() != juce::AudioChannelSet::stereo())
         return false;
 
-    // This checks if the input layout matches the output layout
    #if ! JucePlugin_IsSynth
     if (layouts.getMainOutputChannelSet() != layouts.getMainInputChannelSet())
         return false;
@@ -133,23 +145,16 @@ bool RectanglesAudioProcessor::isBusesLayoutSupported (const BusesLayout& layout
 
 void RectanglesAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
-    //DBG("Processing audio block...");
     juce::ScopedNoDenormals noDenormals;
     auto totalNumInputChannels  = getTotalNumInputChannels();
     auto totalNumOutputChannels = getTotalNumOutputChannels();
 
-    // In case we have more outputs than inputs, this code clears any output
-    // channels that didn't contain input data, (because these aren't
-    // guaranteed to be empty - they may contain garbage).
-    // This is here to avoid people getting screaming feedback
-    // when they first compile a plugin, but obviously you don't need to keep
-    // this code if your algorithm always overwrites all the output channels.
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
         buffer.clear (i, 0, buffer.getNumSamples());
 
     updatePositionInfo();
     float delta_f = lfoRate / sampleRate;
-    
+
     float lfoPhase = phase;
     float modulatorValue;
     for (int channel = 0; channel < totalNumInputChannels; ++channel)
@@ -158,8 +163,7 @@ void RectanglesAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
         for (int sample = 0; sample < buffer.getNumSamples(); ++sample) {
             modulatorValue = modulator.getModulationValue(lfoPhase);
             channelData[sample] = channelData[sample] * modulatorValue;
-            
-            //increment phase
+
             lfoPhase += delta_f;
             if (lfoPhase >= 1.0f) lfoPhase -= 1.0f;
         }
@@ -170,7 +174,7 @@ void RectanglesAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
 //==============================================================================
 bool RectanglesAudioProcessor::hasEditor() const
 {
-    return true; // (change this to false if you choose to not supply an editor)
+    return true;
 }
 
 juce::AudioProcessorEditor* RectanglesAudioProcessor::createEditor()
@@ -179,21 +183,53 @@ juce::AudioProcessorEditor* RectanglesAudioProcessor::createEditor()
 }
 
 //==============================================================================
-void RectanglesAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
+void RectanglesAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
-    // You should use this method to store your parameters in the memory block.
-    // You could do that either as raw data, or use the XML or ValueTree classes
-    // as intermediaries to make it easy to save and load complex data.
+    auto stateXml = parameters.copyState().createXml();
+
+    if (stateXml != nullptr)
+    {
+        // ✅ Save last rates
+        auto* lfoRates = stateXml->createNewChildElement("LfoRates");
+        lfoRates->setAttribute("unsynced", lastUnsyncedRate);
+        lfoRates->setAttribute("synced", lastSyncedRate);
+
+        // ✅ Add shape graph XML
+        if (shapeGraphXmlString.isNotEmpty())
+        {
+            auto shapeXml = juce::XmlDocument::parse(shapeGraphXmlString);
+            if (shapeXml != nullptr)
+                stateXml->addChildElement(shapeXml.release());
+        }
+
+        copyXmlToBinary(*stateXml, destData);
+    }
 }
 
-void RectanglesAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
+
+void RectanglesAudioProcessor::setStateInformation(const void* data, int sizeInBytes)
 {
-    // You should use this method to restore your parameters from this memory block,
-    // whose contents will have been created by the getStateInformation() call.
+    std::unique_ptr<juce::XmlElement> xmlState(getXmlFromBinary(data, sizeInBytes));
+
+    if (xmlState != nullptr)
+    {
+        parameters.replaceState(juce::ValueTree::fromXml(*xmlState));
+
+        if (auto* lfoRates = xmlState->getChildByName("LfoRates"))
+        {
+            lastUnsyncedRate = lfoRates->getDoubleAttribute("unsynced", 1.0);
+            lastSyncedRate   = lfoRates->getDoubleAttribute("synced", 1.0);
+        }
+
+        if (auto* shapeXml = xmlState->getChildByName("ShapeGraph"))
+        {
+            shapeGraphXmlString = shapeXml->toString();
+        }
+    }
 }
+
 
 //==============================================================================
-// This creates new instances of the plugin..
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
     return new RectanglesAudioProcessor();
@@ -212,10 +248,15 @@ double RectanglesAudioProcessor::getBpm() {
     return bpm ? *bpm : 120.0;
 }
 
-void RectanglesAudioProcessor::setLfoRate(float rate)   {
+void RectanglesAudioProcessor::setLfoRate(float rate) {
     lfoRate = rate;
 }
 
-void RectanglesAudioProcessor::updateLfoShape(const ShapeGraph& shapeGraph)   {
+void RectanglesAudioProcessor::updateLfoShape(const ShapeGraph& shapeGraph) {
     modulator.generateModulationValues(&shapeGraph);
+}
+
+void RectanglesAudioProcessor::setShapeGraphXmlString(const juce::String& xmlString)
+{
+    shapeGraphXmlString = xmlString;
 }

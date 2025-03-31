@@ -73,8 +73,12 @@ void ShapeGraph::moveNode(int index, juce::Point<float> position) {
     if(y > bottomBound) y = bottomBound-nodeSize;
     
     //if node is corner node, only move in y direction
-    if(index == 0 || index == nodes.size()-1) {
+    if(index == nodes.size()-1) {
         nodes[index]->rect.setY(y);
+        updateEdge(index-1);
+    } else if (index == 0)  {
+        nodes[index]->rect.setY(y);
+        updateEdge(index);
     } else  {
         x = position.getX();
         int tempLeftBound = nodes[index - 1]->rect.getX();
@@ -92,6 +96,25 @@ void ShapeGraph::moveNode(int index, juce::Point<float> position) {
 void ShapeGraph::moveNode(juce::Point<float> position) {
     ///move selected node to parsed position
     moveNode(selectedIndex, position);
+}
+
+void ShapeGraph::updateEdge(int edgeIndex) {
+    ShapeEdge& edge = *edges[edgeIndex];
+
+    float newEdgeX = calcEdgeMidX(edgeIndex)+edge.xDeviation;
+    float newEdgeY = calcEdgeMidY(edgeIndex)+edge.yDeviation;
+
+    if(newEdgeX < nodes[edge.from]->rect.getX()) newEdgeX = nodes[edge.from]->rect.getX();
+    
+    if(newEdgeX < nodes[edge.from]->rect.getX()) newEdgeX = nodes[edge.from]->rect.getX();
+    if(newEdgeX > nodes[edge.to]->rect.getX()) newEdgeX = nodes[edge.to]->rect.getX();
+
+    /// prevent the edge rect from exceeding topBound and bottomBound
+    
+    if(newEdgeY < topBound) newEdgeY = topBound;
+    if(newEdgeY > bottomBound - nodeSize) newEdgeY = bottomBound - nodeSize;
+
+    edge.rect.setPosition(newEdgeX, newEdgeY);
 }
 
 void ShapeGraph::updateEdgesAroundNode(int nodeIndex) {
@@ -361,3 +384,67 @@ void ShapeGraph::paint(juce::Graphics& g)   {
         g.drawEllipse(edges[i]->rect.toFloat(), 2.0f);
     }
 }
+
+std::unique_ptr<juce::XmlElement> ShapeGraph::createXML() {
+    auto xml = std::make_unique<juce::XmlElement>("ShapeGraph");
+    
+    for (const auto& node : nodes)
+    {
+        auto* nodeXml = xml->createNewChildElement("Node");
+        nodeXml->setAttribute("x", node->rect.getX());
+        nodeXml->setAttribute("y", node->rect.getY());
+    }
+    
+    for (const auto& edge : edges)
+    {
+        auto* edgeXml = xml->createNewChildElement("Edge");
+        edgeXml->setAttribute("from", edge->from);
+        edgeXml->setAttribute("to", edge->to);
+        edgeXml->setAttribute("xDeviation", edge->xDeviation);
+        edgeXml->setAttribute("yDeviation", edge->yDeviation);
+    }
+    
+    return xml;
+}
+
+void ShapeGraph::loadXML(juce::XmlElement& xml)
+{
+    nodes.clear();
+    edges.clear();
+    
+    // Load all nodes
+    for (auto* child : xml.getChildIterator())
+    {
+        if (child->hasTagName("Node"))
+        {
+            float x = child->getDoubleAttribute("x");
+            float y = child->getDoubleAttribute("y");
+            addNode({ x + nodeSize / 2.0f, y + nodeSize / 2.0f }, true);
+        }
+    }
+    
+    
+    // Set corner node positions correctly (you already reposition in resizeNodeLayout anyway)
+    nodes.sort(comparator);
+    
+    // Load all edges
+    for (auto* child : xml.getChildIterator())
+    {
+        if (child->hasTagName("Edge"))
+        {
+            int from = child->getIntAttribute("from");
+            //int to = child->getIntAttribute("to");
+            float xDev = child->getDoubleAttribute("xDeviation");
+            float yDev = child->getDoubleAttribute("yDeviation");
+            
+            int midX = calcEdgeMidX(from);
+            int midY = calcEdgeMidY(from);
+            
+            auto* edge = new ShapeEdge({ midX + xDev, midY + yDev, nodeSize, nodeSize}, from, xDev, yDev);
+            edges.add(edge);
+        }
+    }
+
+}
+
+

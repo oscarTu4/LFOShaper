@@ -10,11 +10,14 @@
 #include "PluginEditor.h"
 #include "ShapeGraph.h"
 #include "Modulator.h"
+#include <juce_data_structures/juce_data_structures.h>
 
 //==============================================================================
 RectanglesAudioProcessorEditor::RectanglesAudioProcessorEditor (RectanglesAudioProcessor& p)
     : AudioProcessorEditor(p), audioProcessor(p)
 {
+    lfoRateSliderAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(audioProcessor.parameters, "lfoRate", lfoRateSlider);
+    syncButtonAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(audioProcessor.parameters, "sync", syncButton);
     
     lfoRateSlider.setSliderStyle(juce::Slider::SliderStyle::RotaryVerticalDrag);
     lfoRateSlider.setRange(0.125, 8.0, 0.001);
@@ -46,6 +49,14 @@ RectanglesAudioProcessorEditor::RectanglesAudioProcessorEditor (RectanglesAudioP
     shapeGraph.setHeight(getHeight()-100);
     shapeGraph.setRightBound(shapeGraph.getLeftBound() + shapeGraph.getWidth());
     shapeGraph.setBottomBound(shapeGraph.getTopBound() + shapeGraph.getHeight());
+    
+    if (audioProcessor.shapeGraphXmlString.isNotEmpty()) {
+        juce::XmlDocument doc(audioProcessor.shapeGraphXmlString);
+        std::unique_ptr<juce::XmlElement> xml(doc.getDocumentElement());
+
+        if (xml != nullptr)
+            shapeGraph.loadXML(*xml);
+    }
     
     audioProcessor.setLfoRate(lfoRateSlider.getValue());
     audioProcessor.updateLfoShape(shapeGraph);
@@ -156,29 +167,26 @@ void RectanglesAudioProcessorEditor::mouseDoubleClick(const juce::MouseEvent& ev
 }
 
 void RectanglesAudioProcessorEditor::mouseUp(const juce::MouseEvent& event) {
-    //only do repaint() here for efficiency?
     //repaint();
     shapeGraph.clearSelection();
 }
 
 void RectanglesAudioProcessorEditor::lfoRateSliderValueChanged() {
-    if(!lfoChangePending) {
-        //startTimer(100);
-        //lfoChangePending = true;
-        if(!syncButton.getToggleState()) {
-            audioProcessor.setLfoRate(lfoRateSlider.getValue());
-            lastUnsyncedRate = lfoRateSlider.getValue();
-        } else {
-            double value = lfoRateSlider.getValue();
-            auto it = std::min_element(rhythmValues.begin(), rhythmValues.end(),
-                                       [=](double a, double b) {
-                return std::abs(a - value) < std::abs(b - value);
-            });
-            lastSyncedRate = *it;
-            
-            if (it != rhythmValues.end())
-                lfoRateSlider.setValue(*it, juce::dontSendNotification);
-        }
+    if(!syncButton.getToggleState()) {
+        audioProcessor.setLfoRate(lfoRateSlider.getValue());
+        lastUnsyncedRate = lfoRateSlider.getValue();
+        audioProcessor.lastUnsyncedRate = lastUnsyncedRate;
+    } else {
+        double value = lfoRateSlider.getValue();
+        auto it = std::min_element(rhythmValues.begin(), rhythmValues.end(),
+                                   [=](double a, double b) {
+            return std::abs(a - value) < std::abs(b - value);
+        });
+        lastSyncedRate = *it;
+        audioProcessor.lastSyncedRate = lastSyncedRate;
+        
+        if (it != rhythmValues.end())
+            lfoRateSlider.setValue(*it, juce::dontSendNotification);
     }
 }
 
@@ -197,6 +205,7 @@ void RectanglesAudioProcessorEditor::syncButtonClicked() {
             
             if (it != rhythmValues.end()) {
                 lastSyncedRate = *it;
+                audioProcessor.lastSyncedRate = lastSyncedRate;
                 lfoRateSlider.setValue(*it);
             }
         }
@@ -229,15 +238,12 @@ void RectanglesAudioProcessorEditor::syncButtonClicked() {
 
 
 void RectanglesAudioProcessorEditor::timerCallback() {
-    if(lfoChangePending) {
-        lfoChangePending = false;
-        stopTimer();
-    }
-    
     if(mouseDragPending) {
         repaint();
         audioProcessor.updateLfoShape(shapeGraph);
         mouseDragPending = false;
         stopTimer();
     }
+    if (auto xml = shapeGraph.createXML())
+        audioProcessor.setShapeGraphXmlString(xml->toString());
 }

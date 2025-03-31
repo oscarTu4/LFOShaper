@@ -10,11 +10,10 @@
 
 #pragma once
 #include <juce_gui_basics/juce_gui_basics.h>
+#include <juce_data_structures/juce_data_structures.h> 
 
 struct ShapeNode {
     juce::Rectangle<float> rect;
-    //int index;
-    bool isQuantized = false;
     
     ShapeNode(juce::Rectangle<float> rect, int index) : rect(rect) {}
 };
@@ -53,7 +52,7 @@ private:
     
     int height;
     int width;
-    const int nodeSize = 10;
+    const float nodeSize = 10;
     
     int leftBound;
     int rightBound;
@@ -67,6 +66,7 @@ private:
     juce::Array<int> widthQuantizationSteps;
     
     void updateEdgesAroundNode(int nodeIndex);
+    void updateEdge(int nodeIndex);
     void makeEdgesFromScratch();
     void addEdge(int from);
     void shiftEdgeIndexes(int leftAnchorNode);
@@ -123,6 +123,9 @@ public:
     int getTopBound() const;
     void setBottomBound(int bottom);
     int getBottomBound() const;
+    
+    std::unique_ptr<juce::XmlElement> createXML();
+    void loadXML(juce::XmlElement& xml);
     
 };
 

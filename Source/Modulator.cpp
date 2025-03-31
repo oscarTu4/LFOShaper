@@ -18,7 +18,7 @@ Modulator::Modulator() {
 }
 
 void Modulator::generateModulationValues(const ShapeGraph* shapeGraph) {
-    if(shapeGraph == nullptr) return;
+    if(shapeGraph == nullptr || shapeGraph->edges.size() == 0) return;
     ///generate a modulation curve from the ShapeGraph data
     
     auto newValues = std::make_shared<std::vector<float>>(resolution, 0.0f);

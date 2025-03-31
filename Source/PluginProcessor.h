@@ -61,12 +61,18 @@ public:
     void setLfoRate(float rate);
     void updateLfoShape(const ShapeGraph& shapeGraph);
     
+    void setShapeGraphXmlString(const juce::String& xmlString);
+    
+    juce::AudioPlayHead::PositionInfo positionInfo;
+    juce::AudioProcessorValueTreeState parameters;
+    juce::String shapeGraphXmlString;
+    
+    float lastUnsyncedRate = 1.0f;
+    float lastSyncedRate = 1.0f;
 
 private:
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (RectanglesAudioProcessor)
-
-    juce::AudioPlayHead::PositionInfo positionInfo;
     
     juce::Random random;
     std::vector<std::pair<float, float>> lfoShape;
@@ -75,4 +81,5 @@ private:
     float lfoRate;
     Modulator modulator;
     float phase = 0;
+
 };
