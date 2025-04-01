@@ -18,9 +18,10 @@ RectanglesAudioProcessorEditor::RectanglesAudioProcessorEditor (RectanglesAudioP
 {
     lfoRateSliderAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(audioProcessor.parameters, "lfoRate", lfoRateSlider);
     syncButtonAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(audioProcessor.parameters, "sync", syncButton);
+    depthSliderAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(audioProcessor.parameters, "depth", depthSlider);
     
     lfoRateSlider.setSliderStyle(juce::Slider::SliderStyle::RotaryVerticalDrag);
-    lfoRateSlider.setRange(0.125, 8.0, 0.001);
+    lfoRateSlider.setRange(0.125, 16.0, 0.01);
     lfoRateSlider.setColour(juce::Slider::rotarySliderFillColourId, juce::Colours::orange);
     lfoRateSlider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 100, 20); // false = no outline
     lfoRateSlider.setColour(juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
@@ -30,7 +31,6 @@ RectanglesAudioProcessorEditor::RectanglesAudioProcessorEditor (RectanglesAudioP
     };
     lfoRateSlider.setColour(juce::Slider::thumbColourId, juce::Colours::transparentBlack);
     lfoRateSlider.setValue(1);
-    lastUnsyncedRate = 1;
     lfoRateSlider.onValueChange = [this] {
         lfoRateSliderValueChanged();
     };
@@ -39,6 +39,29 @@ RectanglesAudioProcessorEditor::RectanglesAudioProcessorEditor (RectanglesAudioP
     syncButton.setButtonText("Sync");
     syncButton.onClick = [this] { syncButtonClicked(); };
     addAndMakeVisible(syncButton);
+    
+    depthSlider.setSliderStyle(juce::Slider::SliderStyle::LinearHorizontal);
+    depthSlider.setColour(juce::Slider::thumbColourId, juce::Colours::orange);
+    depthSlider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+    depthSlider.setRange(-1.0, 1.0, 0.01);
+    depthSlider.setValue(0);
+    depthSlider.setVelocityBasedMode(true);
+    depthSlider.setScrollWheelEnabled(true);
+    depthSlider.setDoubleClickReturnValue(true, 0.0);
+    depthSlider.setVelocityModeParameters(
+        1.0,   // sensitivity (higher = faster value change)
+        0.5,   // threshold from click point (before drag starts affecting value)
+        0.09,  // offset (prevents small accidental changes)
+        true   // user can fine-adjust with a modifier (like Shift)
+    );
+    depthSlider.onValueChange = [this] {
+        audioProcessor.setDepth(depthSlider.getValue());
+    };
+    addAndMakeVisible(depthSlider);
+    
+    depthLabel.setText("Depth", juce::dontSendNotification);
+    depthLabel.attachToComponent(&depthSlider, true);
+    addAndMakeVisible(depthLabel);
     
     setSize (600, 400);
     
@@ -60,6 +83,13 @@ RectanglesAudioProcessorEditor::RectanglesAudioProcessorEditor (RectanglesAudioP
     
     audioProcessor.setLfoRate(lfoRateSlider.getValue());
     audioProcessor.updateLfoShape(shapeGraph);
+    
+    rhythmValuesHz.clear();
+    bpm = audioProcessor.getBpm();
+    for (auto beat : rhythmValues)   {
+        rhythmValuesHz.push_back(bpm/(60*beat));
+        std::cout << "beat: " << beat << " Hz: " << bpm/(60*beat) << std::endl;
+    }
 }
 
 RectanglesAudioProcessorEditor::~RectanglesAudioProcessorEditor()
@@ -90,9 +120,10 @@ void RectanglesAudioProcessorEditor::resized()
     
     shapeGraph.resizeNodeLayout();
     lfoRateSlider.setBounds(getWidth()/2, getHeight()-100, 100, 80);
-    //place syncButton right next to lfoRateSlider
     syncButton.setBounds(lfoRateSlider.getX()+lfoRateSlider.getWidth(), lfoRateSlider.getY(), 80, 80);
     
+    //set depth slider position left of lfo rate slider
+    depthSlider.setBounds(lfoRateSlider.getX()-100, getHeight()-100, 100, 80);
     repaint();
     
     audioProcessor.updateLfoShape(shapeGraph);
@@ -172,68 +203,72 @@ void RectanglesAudioProcessorEditor::mouseUp(const juce::MouseEvent& event) {
 }
 
 void RectanglesAudioProcessorEditor::lfoRateSliderValueChanged() {
-    if(!syncButton.getToggleState()) {
-        audioProcessor.setLfoRate(lfoRateSlider.getValue());
-        lastUnsyncedRate = lfoRateSlider.getValue();
-        audioProcessor.lastUnsyncedRate = lastUnsyncedRate;
-    } else {
-        double value = lfoRateSlider.getValue();
-        auto it = std::min_element(rhythmValues.begin(), rhythmValues.end(),
-                                   [=](double a, double b) {
-            return std::abs(a - value) < std::abs(b - value);
+    if(syncButton.getToggleState()) {
+        float freq = lfoRateSlider.getValue();
+        // Snap to nearest rhythm value
+        auto it = std::min_element(rhythmValuesHz.begin(), rhythmValuesHz.end(),
+                                   [=](float a, float b) {
+            return std::abs(a - freq) < std::abs(b -  freq);
         });
-        lastSyncedRate = *it;
-        audioProcessor.lastSyncedRate = lastSyncedRate;
         
-        if (it != rhythmValues.end())
+        if (it != rhythmValuesHz.end())
             lfoRateSlider.setValue(*it, juce::dontSendNotification);
+        else std::cout << "No match found" << std::endl;
     }
+    audioProcessor.setLfoRate(lfoRateSlider.getValue());
+    std::cout << "lfoRateSliderValueChanged lfoRateSlider value: " << lfoRateSlider.getValue() << std::endl;
 }
 
 void RectanglesAudioProcessorEditor::syncButtonClicked() {
+    bpm = audioProcessor.getBpm();
     if (syncButton.getToggleState()) {
-        if(lastSyncedRate != 0) {
-            lfoRateSlider.setValue(lastSyncedRate);
-        } else {
-            float bpm = audioProcessor.getBpm();
-            double lfoRate = 60.0 / bpm;
-            // Snap to nearest rhythm value
-            auto it = std::min_element(rhythmValues.begin(), rhythmValues.end(),
-                                       [=](double a, double b) {
-                return std::abs(a - lfoRate) < std::abs(b - lfoRate);
-            });
-            
-            if (it != rhythmValues.end()) {
-                lastSyncedRate = *it;
-                audioProcessor.lastSyncedRate = lastSyncedRate;
-                lfoRateSlider.setValue(*it);
-            }
-        }
+        auto [minHzIt, maxHzIt] = std::minmax_element(rhythmValuesHz.begin(), rhythmValuesHz.end());
+        std::cout << "minHz: " << *minHzIt << " maxHz: " << *maxHzIt << std::endl;
+        lfoRateSlider.setRange(*minHzIt, *maxHzIt, 0.01f);
         
+        //float freq = juce::jlimit<float>(*minHzIt, *maxHzIt, lfoRateSlider.getValue());
+        float freq = lfoRateSlider.getValue();
+        // Snap to nearest rhythm value
+        auto it = std::min_element(rhythmValuesHz.begin(), rhythmValuesHz.end(),
+                                   [=](float a, float b) {
+            return std::abs(a - freq) < std::abs(b -  freq);
+        });
+        
+        if (it != rhythmValuesHz.end()) {
+            lfoRateSlider.setValue(*it, juce::dontSendNotification);
+        } else std::cout << "No match found" << std::endl;
         audioProcessor.setLfoRate(lfoRateSlider.getValue());
         
         // Set text to rhythm labels like "1/4"
-        lfoRateSlider.textFromValueFunction = [this](double value) -> juce::String {
-            juce::String suffix = " Bars";
-            for (size_t i = 0; i < rhythmValues.size(); ++i)
-                if (std::abs(value - rhythmValues[i]) < 0.001)  {
-                    if(i == 1) suffix = " Bar";
-                    else suffix = " Bars";
-                    return rhythmLabels[(int)i] + suffix;
-                }
-            return juce::String(value, 2);
+        lfoRateSlider.textFromValueFunction = [this](float value) -> juce::String {
+            float note = bpm / (60.0f * value);
+
+            auto it = std::min_element(rhythmValues.begin(), rhythmValues.end(),
+                                       [=](float a, float b) {
+                return std::abs(a - note) < std::abs(b - note);
+            });
+
+            if (it != rhythmValues.end())
+            {
+                auto index = std::distance(rhythmValues.begin(), it);
+                return rhythmLabels[(int)index] + " Bars";
+            }
+
+            return juce::String(note, 2) + " Bars"; // fallback
         };
+
+
     }
     else {
-        // Restore last free rate and "Hz" suffix
-        lfoRateSlider.setValue(lastUnsyncedRate);
-        audioProcessor.setLfoRate(lfoRateSlider.getValue());
+        audioProcessor.setLfoRate(juce::jlimit<float>(0.125, 16.0, lfoRateSlider.getValue()));
+        lfoRateSlider.setRange(0.125, 16.0, 0.01);
         
         lfoRateSlider.textFromValueFunction = [](double value) {
             return juce::String(value, 2) + " Hz";
         };
     }
     lfoRateSlider.updateText();
+    std::cout << "syncButtonClicked lfoRateSlider value: " << lfoRateSlider.getValue() << std::endl;
 }
 
 

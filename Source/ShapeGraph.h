@@ -65,7 +65,7 @@ private:
     int quantizeDepth;
     juce::Array<int> widthQuantizationSteps;
     
-    void updateEdgesAroundNode(int nodeIndex);
+    //void updateEdgesAroundNode(int nodeIndex);
     void updateEdge(int nodeIndex);
     void makeEdgesFromScratch();
     void addEdge(int from);

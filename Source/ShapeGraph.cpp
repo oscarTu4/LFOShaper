@@ -88,7 +88,9 @@ void ShapeGraph::moveNode(int index, juce::Point<float> position) {
         if(x > tempRightBound) x = tempRightBound;
         
         nodes[index]->rect.setPosition(x, y);
-        updateEdgesAroundNode(index);
+        //updateEdgesAroundNode(index);
+        updateEdge(index);
+        updateEdge(index-1);
     }
 }
 
@@ -117,7 +119,7 @@ void ShapeGraph::updateEdge(int edgeIndex) {
     edge.rect.setPosition(newEdgeX, newEdgeY);
 }
 
-void ShapeGraph::updateEdgesAroundNode(int nodeIndex) {
+/*void ShapeGraph::updateEdgesAroundNode(int nodeIndex) {
     ShapeEdge& edgeLeft = *edges[nodeIndex-1];
     ShapeEdge& edgeRight = *edges[nodeIndex];
 
@@ -141,7 +143,7 @@ void ShapeGraph::updateEdgesAroundNode(int nodeIndex) {
 
     edgeLeft.rect.setPosition(newEdgeLeftX, newEdgeLeftY);
     edgeRight.rect.setPosition(newEdgeRightX, newEdgeRightY);
-}
+}*/
 
 
 void ShapeGraph::removeNode(int nodeIndex) {
@@ -175,7 +177,9 @@ void ShapeGraph::quantizeNode (int index)    {
     }
     
     //update edges
-    updateEdgesAroundNode(index);
+    //updateEdgesAroundNode(index);
+    updateEdge(index);
+    updateEdge(index-1);
 }
 
 void ShapeGraph::quantizeNode() {
@@ -199,7 +203,7 @@ void ShapeGraph::addEdge(int fromIndex) {
 }
 
 void ShapeGraph::moveEdge(int index, juce::Point<float> position) {
-    std::cout << "Moving edge" << std::endl;
+    //std::cout << "Moving edge" << std::endl;
     ///move edge with index to parsed position
     /// Ensure the node stays within its allowed space
     ShapeEdge& edge = *edges[index];
@@ -221,7 +225,7 @@ void ShapeGraph::moveEdge(int index, juce::Point<float> position) {
     edge.yDeviation = y - calcEdgeMidY(from);
     edge.rect.setPosition(x, y);
     //print deviations for edge
-    std::cout << "Edge xDeviation: " << edge.xDeviation << " yDeviation: " << edge.yDeviation << std::endl;
+    //std::cout << "Edge xDeviation: " << edge.xDeviation << " yDeviation: " << edge.yDeviation << std::endl;
 }
 
 void ShapeGraph::moveEdge(juce::Point<float> position) {
@@ -284,7 +288,11 @@ void ShapeGraph::resizeNodeLayout()  {
     ///update the position of the corner nodes, later on the other nodes will be updated, priority very low
     nodes[0]->rect.setPosition(leftBound, bottomBound-nodeSize);
     nodes[nodes.size()-1]->rect.setPosition(rightBound-nodeSize, topBound);
-    makeEdgesFromScratch();
+    //makeEdgesFromScratch();
+    //recreate all edges
+    for (int i = 0; i < nodes.size()-1; ++i) {
+        addEdge(i);
+    }
     
     //clear previous quantization steps
     widthQuantizationSteps.clear();

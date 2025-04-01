@@ -1,10 +1,10 @@
 /*
-  ==============================================================================
-
-    This file contains the basic framework code for a JUCE plugin processor.
-
-  ==============================================================================
-*/
+ ==============================================================================
+ 
+ This file contains the basic framework code for a JUCE plugin processor.
+ 
+ ==============================================================================
+ */
 
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
@@ -15,33 +15,29 @@
 //==============================================================================
 RectanglesAudioProcessor::RectanglesAudioProcessor()
 #ifndef JucePlugin_PreferredChannelConfigurations
-     :  AudioProcessor (BusesProperties()
-                     #if ! JucePlugin_IsMidiEffect
-                      #if ! JucePlugin_IsSynth
-                       .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
-                      #endif
-                       .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
-                     #endif
-                       ), parameters (*this, nullptr, "PARAMETERS",
-                                      [] {
-                                          using namespace juce;
-                                          AudioProcessorValueTreeState::ParameterLayout layout;
-
-                                          layout.add(std::make_unique<AudioParameterFloat>(
-                                              ParameterID{"lfoRate", 1},      // ✅ version hint = 1
-                                              "LFO Rate",
-                                              NormalisableRange<float>(0.125f, 8.0f, 0.001f),
-                                              1.0f
-                                          ));
-
-                                          layout.add(std::make_unique<AudioParameterBool>(
-                                              ParameterID{"sync", 1},         // ✅ version hint = 1
-                                              "Sync",
-                                              false
-                                          ));
-
-                                          return layout;
-                                      }())
+:  AudioProcessor (BusesProperties()
+#if ! JucePlugin_IsMidiEffect
+#if ! JucePlugin_IsSynth
+                   .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
+#endif
+                   .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
+#endif
+                   ),
+parameters (*this, nullptr, "PARAMETERS", [] {
+    using namespace juce;
+    AudioProcessorValueTreeState::ParameterLayout layout;
+    
+    layout.add(std::make_unique<AudioParameterFloat>(
+                                                     ParameterID{"lfoRate", 1}, "LFO Rate", NormalisableRange<float>(0.125f, 16.0f, 0.01f), 1.0f));
+    
+    layout.add(std::make_unique<AudioParameterBool>(
+                                                    ParameterID{"sync", 1}, "Sync", false));
+    
+    layout.add(std::make_unique<AudioParameterFloat>(
+                                                     ParameterID{"depth", 1}, "Depth", NormalisableRange<float>(-1.0f, 1.0f), 0.0f));
+    
+    return layout;
+}())
 #endif
 {
 }
@@ -58,29 +54,29 @@ const juce::String RectanglesAudioProcessor::getName() const
 
 bool RectanglesAudioProcessor::acceptsMidi() const
 {
-   #if JucePlugin_WantsMidiInput
+#if JucePlugin_WantsMidiInput
     return true;
-   #else
+#else
     return false;
-   #endif
+#endif
 }
 
 bool RectanglesAudioProcessor::producesMidi() const
 {
-   #if JucePlugin_ProducesMidiOutput
+#if JucePlugin_ProducesMidiOutput
     return true;
-   #else
+#else
     return false;
-   #endif
+#endif
 }
 
 bool RectanglesAudioProcessor::isMidiEffect() const
 {
-   #if JucePlugin_IsMidiEffect
+#if JucePlugin_IsMidiEffect
     return true;
-   #else
+#else
     return false;
-   #endif
+#endif
 }
 
 double RectanglesAudioProcessor::getTailLengthSeconds() const
@@ -125,21 +121,21 @@ void RectanglesAudioProcessor::releaseResources()
 #ifndef JucePlugin_PreferredChannelConfigurations
 bool RectanglesAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
-  #if JucePlugin_IsMidiEffect
+#if JucePlugin_IsMidiEffect
     juce::ignoreUnused (layouts);
     return true;
-  #else
+#else
     if (layouts.getMainOutputChannelSet() != juce::AudioChannelSet::mono()
-     && layouts.getMainOutputChannelSet() != juce::AudioChannelSet::stereo())
+        && layouts.getMainOutputChannelSet() != juce::AudioChannelSet::stereo())
         return false;
-
-   #if ! JucePlugin_IsSynth
+    
+#if ! JucePlugin_IsSynth
     if (layouts.getMainOutputChannelSet() != layouts.getMainInputChannelSet())
         return false;
-   #endif
-
+#endif
+    
     return true;
-  #endif
+#endif
 }
 #endif
 
@@ -148,22 +144,25 @@ void RectanglesAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
     juce::ScopedNoDenormals noDenormals;
     auto totalNumInputChannels  = getTotalNumInputChannels();
     auto totalNumOutputChannels = getTotalNumOutputChannels();
-
+    
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
         buffer.clear (i, 0, buffer.getNumSamples());
-
+    
     updatePositionInfo();
     float delta_f = lfoRate / sampleRate;
-
+    
     float lfoPhase = phase;
     float modulatorValue;
+    float noiseGain = 0.25;
     for (int channel = 0; channel < totalNumInputChannels; ++channel)
     {
         auto* channelData = buffer.getWritePointer (channel);
         for (int sample = 0; sample < buffer.getNumSamples(); ++sample) {
-            modulatorValue = modulator.getModulationValue(lfoPhase);
-            channelData[sample] = channelData[sample] * modulatorValue;
-
+            modulatorValue = modulator.getModulationValue(lfoPhase)*depth;
+            //float noise = noiseGain * (2.0f * random.nextFloat() - 1.0f);
+            channelData[sample] = channelData[sample] + channelData[sample] * modulatorValue;
+            //channelData[sample] = noise + noise * modulatorValue;
+            
             lfoPhase += delta_f;
             if (lfoPhase >= 1.0f) lfoPhase -= 1.0f;
         }
@@ -185,47 +184,35 @@ juce::AudioProcessorEditor* RectanglesAudioProcessor::createEditor()
 //==============================================================================
 void RectanglesAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
-    auto stateXml = parameters.copyState().createXml();
-
+    /*auto stateXml = parameters.copyState().createXml();
+    
     if (stateXml != nullptr)
     {
-        // ✅ Save last rates
-        auto* lfoRates = stateXml->createNewChildElement("LfoRates");
-        lfoRates->setAttribute("unsynced", lastUnsyncedRate);
-        lfoRates->setAttribute("synced", lastSyncedRate);
-
-        // ✅ Add shape graph XML
         if (shapeGraphXmlString.isNotEmpty())
         {
             auto shapeXml = juce::XmlDocument::parse(shapeGraphXmlString);
             if (shapeXml != nullptr)
                 stateXml->addChildElement(shapeXml.release());
         }
-
+        
         copyXmlToBinary(*stateXml, destData);
-    }
+    }*/
 }
 
 
 void RectanglesAudioProcessor::setStateInformation(const void* data, int sizeInBytes)
 {
-    std::unique_ptr<juce::XmlElement> xmlState(getXmlFromBinary(data, sizeInBytes));
-
+    /*std::unique_ptr<juce::XmlElement> xmlState(getXmlFromBinary(data, sizeInBytes));
+    
     if (xmlState != nullptr)
     {
         parameters.replaceState(juce::ValueTree::fromXml(*xmlState));
-
-        if (auto* lfoRates = xmlState->getChildByName("LfoRates"))
-        {
-            lastUnsyncedRate = lfoRates->getDoubleAttribute("unsynced", 1.0);
-            lastSyncedRate   = lfoRates->getDoubleAttribute("synced", 1.0);
-        }
-
+        
         if (auto* shapeXml = xmlState->getChildByName("ShapeGraph"))
         {
             shapeGraphXmlString = shapeXml->toString();
         }
-    }
+    }*/
 }
 
 
@@ -246,6 +233,10 @@ void RectanglesAudioProcessor::updatePositionInfo() {
 double RectanglesAudioProcessor::getBpm() {
     juce::Optional<double> bpm = positionInfo.getBpm();
     return bpm ? *bpm : 120.0;
+}
+
+void RectanglesAudioProcessor::setDepth(float depth) {
+    this->depth = depth;
 }
 
 void RectanglesAudioProcessor::setLfoRate(float rate) {

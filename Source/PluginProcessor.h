@@ -58,6 +58,7 @@ public:
     void updatePositionInfo();
     double getBpm();
     
+    void setDepth(float depth);
     void setLfoRate(float rate);
     void updateLfoShape(const ShapeGraph& shapeGraph);
     
@@ -66,9 +67,6 @@ public:
     juce::AudioPlayHead::PositionInfo positionInfo;
     juce::AudioProcessorValueTreeState parameters;
     juce::String shapeGraphXmlString;
-    
-    float lastUnsyncedRate = 1.0f;
-    float lastSyncedRate = 1.0f;
 
 private:
     //==============================================================================
@@ -80,6 +78,7 @@ private:
     float sampleRate;
     float lfoRate;
     Modulator modulator;
+    float depth = 1.0f;
     float phase = 0;
 
 };
