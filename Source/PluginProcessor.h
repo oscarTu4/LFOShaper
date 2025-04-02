@@ -60,7 +60,8 @@ public:
     
     void setDepth(float depth);
     void setLfoRate(float rate);
-    void updateLfoShape(const ShapeGraph& shapeGraph);
+    void updateLfoData(const ShapeGraph& shapeGraph);
+    float getPhase();
     
     void setShapeGraphXmlString(const juce::String& xmlString);
     

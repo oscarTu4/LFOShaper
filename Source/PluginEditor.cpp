@@ -16,6 +16,10 @@
 RectanglesAudioProcessorEditor::RectanglesAudioProcessorEditor (RectanglesAudioProcessor& p)
     : AudioProcessorEditor(p), audioProcessor(p)
 {
+    addAndMakeVisible(lfoRateSlider);
+    addAndMakeVisible(depthSlider);
+    addAndMakeVisible(depthLabel);
+    
     lfoRateSliderAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(audioProcessor.parameters, "lfoRate", lfoRateSlider);
     syncButtonAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(audioProcessor.parameters, "sync", syncButton);
     depthSliderAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(audioProcessor.parameters, "depth", depthSlider);
@@ -26,15 +30,12 @@ RectanglesAudioProcessorEditor::RectanglesAudioProcessorEditor (RectanglesAudioP
     lfoRateSlider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 100, 20); // false = no outline
     lfoRateSlider.setColour(juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
     lfoRateSlider.setHasFocusOutline(true);
-    lfoRateSlider.textFromValueFunction = [](double value) {
-        return juce::String(value, 3) + " Hz";
-    };
+    
     lfoRateSlider.setColour(juce::Slider::thumbColourId, juce::Colours::transparentBlack);
     lfoRateSlider.setValue(1);
     lfoRateSlider.onValueChange = [this] {
         lfoRateSliderValueChanged();
     };
-    addAndMakeVisible(lfoRateSlider);
     
     syncButton.setButtonText("Sync");
     syncButton.onClick = [this] { syncButtonClicked(); };
@@ -57,12 +58,18 @@ RectanglesAudioProcessorEditor::RectanglesAudioProcessorEditor (RectanglesAudioP
     depthSlider.onValueChange = [this] {
         audioProcessor.setDepth(depthSlider.getValue());
     };
-    addAndMakeVisible(depthSlider);
     
     depthLabel.setText("Depth", juce::dontSendNotification);
     depthLabel.attachToComponent(&depthSlider, true);
-    addAndMakeVisible(depthLabel);
     
+    if (!syncButton.getToggleState())
+    {
+        lfoRateSlider.textFromValueFunction = [](double value) {
+            return juce::String(value, 2) + " Hz";
+        };
+        lfoRateSlider.updateText();
+    }
+
     setSize (600, 400);
     
     shapeGraph.setQuantizeDepth(8);
@@ -82,7 +89,7 @@ RectanglesAudioProcessorEditor::RectanglesAudioProcessorEditor (RectanglesAudioP
     }
     
     audioProcessor.setLfoRate(lfoRateSlider.getValue());
-    audioProcessor.updateLfoShape(shapeGraph);
+    audioProcessor.updateLfoData(shapeGraph);
     
     rhythmValuesHz.clear();
     bpm = audioProcessor.getBpm();
@@ -90,6 +97,7 @@ RectanglesAudioProcessorEditor::RectanglesAudioProcessorEditor (RectanglesAudioP
         rhythmValuesHz.push_back(bpm/(60*beat));
         std::cout << "beat: " << beat << " Hz: " << bpm/(60*beat) << std::endl;
     }
+    startTimerHz(30);
 }
 
 RectanglesAudioProcessorEditor::~RectanglesAudioProcessorEditor()
@@ -104,13 +112,19 @@ void RectanglesAudioProcessorEditor::paint (juce::Graphics& g)
     //draw all rectangles
     shapeGraph.paint(g);
     
-    //paintCounter++;
-    //std::cout << paintCounter << std::endl;
+    //draw playhead
+    g.setColour(juce::Colours::grey.withAlpha(0.5f));
+    juce::Path path;
+    float xPos = shapeGraph.getLeftBound()+audioProcessor.getPhase()*shapeGraph.getWidth();
+    path.startNewSubPath(xPos, shapeGraph.getTopBound());
+    path.lineTo(xPos, shapeGraph.getBottomBound());
+    g.strokePath(path, juce::PathStrokeType(2.0f));
+    path.closeSubPath();
 }
 
 void RectanglesAudioProcessorEditor::resized()
 {
-    std::cout << "Resized" << std::endl;
+    //std::cout << "Resized" << std::endl;
     shapeGraph.setHeight(getHeight()-100);
     shapeGraph.setWidth(getWidth()-20);
     shapeGraph.setLeftBound(10);
@@ -119,14 +133,12 @@ void RectanglesAudioProcessorEditor::resized()
     shapeGraph.setBottomBound(shapeGraph.getTopBound()+shapeGraph.getHeight());
     
     shapeGraph.resizeNodeLayout();
-    lfoRateSlider.setBounds(getWidth()/2, getHeight()-100, 100, 80);
+    lfoRateSlider.setBounds(getWidth()/2, getHeight()-80, 100, 80);
     syncButton.setBounds(lfoRateSlider.getX()+lfoRateSlider.getWidth(), lfoRateSlider.getY(), 80, 80);
-    
-    //set depth slider position left of lfo rate slider
-    depthSlider.setBounds(lfoRateSlider.getX()-100, getHeight()-100, 100, 80);
+    depthSlider.setBounds(lfoRateSlider.getX()-100, getHeight()-80, 100, 80);
     repaint();
     
-    audioProcessor.updateLfoShape(shapeGraph);
+    audioProcessor.updateLfoData(shapeGraph);
 }
 
 void RectanglesAudioProcessorEditor::mouseDown(const juce::MouseEvent& event)   {
@@ -143,7 +155,6 @@ void RectanglesAudioProcessorEditor::mouseDown(const juce::MouseEvent& event)   
         
         //quantize if control key is down
         if(event.mods.isCtrlDown()) {
-            //if the control key is pressed, quantize the node
             shapeGraph.quantizeNode();
             clickedSomething = true;
         }
@@ -160,21 +171,17 @@ void RectanglesAudioProcessorEditor::mouseDown(const juce::MouseEvent& event)   
     
 }
 
-//TODO check if position has actually changed, might reduce CPU usage
+
 void RectanglesAudioProcessorEditor::mouseDrag(const juce::MouseEvent& event)   {
     //std::cout << "Mouse drag" << std::endl;
-    bool grabbedSomething = false;
+    mouseDragPending = false;
     if(shapeGraph.selectionType == ShapeGraph::SelectionType::Node) {
         shapeGraph.moveNode(event.getPosition().toFloat()-draggedShapeOffset);
-        grabbedSomething = true;
+        mouseDragPending = true;
     }
     
     else if(shapeGraph.selectionType == ShapeGraph::SelectionType::Edge) {
         shapeGraph.moveEdge(event.getPosition().toFloat()-draggedShapeOffset);
-        grabbedSomething = true;
-    }
-    if(grabbedSomething) {
-        startTimer(10);
         mouseDragPending = true;
     }
 }
@@ -182,7 +189,6 @@ void RectanglesAudioProcessorEditor::mouseDrag(const juce::MouseEvent& event)   
 void RectanglesAudioProcessorEditor::mouseDoubleClick(const juce::MouseEvent& event)    {
     //std::cout << "Mouse double click" << std::endl;
     auto [nodeIndex, node] = shapeGraph.containsPointOnNode(event.getPosition().toFloat());
-    //auto [edgeIndex, edge] = shapeGraph.containsPointOnEdge(event.getPosition().toFloat());
     
     //check wether double click was on node and delete, otherwise create new node
     if(node)    {
@@ -193,7 +199,7 @@ void RectanglesAudioProcessorEditor::mouseDoubleClick(const juce::MouseEvent& ev
         shapeGraph.addNode(event.getPosition().toFloat(), false);
         std::cout << "Added node" << std::endl;
     }
-    audioProcessor.updateLfoShape(shapeGraph);
+    audioProcessor.updateLfoData(shapeGraph);
     repaint();
 }
 
@@ -274,11 +280,24 @@ void RectanglesAudioProcessorEditor::syncButtonClicked() {
 
 void RectanglesAudioProcessorEditor::timerCallback() {
     if(mouseDragPending) {
-        repaint();
-        audioProcessor.updateLfoShape(shapeGraph);
+        //repaint();
+        audioProcessor.updateLfoData(shapeGraph);
         mouseDragPending = false;
-        stopTimer();
     }
     if (auto xml = shapeGraph.createXML())
         audioProcessor.setShapeGraphXmlString(xml->toString());
+    
+    // check if bpm has changed
+    float newBpm = audioProcessor.getBpm();
+    if(newBpm != bpm)    {
+        rhythmValuesHz.clear();
+        bpm = audioProcessor.getBpm();
+        for (auto beat : rhythmValues)   {
+            rhythmValuesHz.push_back(bpm/(60*beat));
+            std::cout << "beat: " << beat << " Hz: " << bpm/(60*beat) << std::endl;
+        }
+    }
+    
+    //update position of playhead done in repaint
+    repaint();
 }

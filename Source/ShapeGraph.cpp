@@ -88,7 +88,6 @@ void ShapeGraph::moveNode(int index, juce::Point<float> position) {
         if(x > tempRightBound) x = tempRightBound;
         
         nodes[index]->rect.setPosition(x, y);
-        //updateEdgesAroundNode(index);
         updateEdge(index);
         updateEdge(index-1);
     }
@@ -119,32 +118,6 @@ void ShapeGraph::updateEdge(int edgeIndex) {
     edge.rect.setPosition(newEdgeX, newEdgeY);
 }
 
-/*void ShapeGraph::updateEdgesAroundNode(int nodeIndex) {
-    ShapeEdge& edgeLeft = *edges[nodeIndex-1];
-    ShapeEdge& edgeRight = *edges[nodeIndex];
-
-    float newEdgeLeftX = calcEdgeMidX(nodeIndex-1)+edgeLeft.xDeviation;
-    float newEdgeRightX = calcEdgeMidX(nodeIndex)+edgeRight.xDeviation;
-    float newEdgeLeftY = calcEdgeMidY(nodeIndex-1)+edgeLeft.yDeviation;
-    float newEdgeRightY = calcEdgeMidY(nodeIndex)+edgeRight.yDeviation;
-
-    if(newEdgeLeftX < nodes[edgeLeft.from]->rect.getX()) newEdgeLeftX = nodes[edgeLeft.from]->rect.getX();
-    if(newEdgeLeftX > nodes[edgeLeft.to]->rect.getX()) newEdgeLeftX = nodes[nodeIndex]->rect.getX();
-    
-    if(newEdgeRightX < nodes[edgeRight.from]->rect.getX()) newEdgeRightX = nodes[edgeRight.from]->rect.getX();
-    if(newEdgeRightX > nodes[edgeRight.to]->rect.getX()) newEdgeRightX = nodes[edgeRight.to]->rect.getX();
-
-    /// prevent the edge rect from exceeding topBound and bottomBound
-    if(newEdgeLeftY < topBound) newEdgeLeftY = topBound;
-    if(newEdgeLeftY > bottomBound - nodeSize) newEdgeLeftY = bottomBound - nodeSize;
-    
-    if(newEdgeRightY < topBound) newEdgeRightY = topBound;
-    if(newEdgeRightY > bottomBound - nodeSize) newEdgeRightY = bottomBound - nodeSize;
-
-    edgeLeft.rect.setPosition(newEdgeLeftX, newEdgeLeftY);
-    edgeRight.rect.setPosition(newEdgeRightX, newEdgeRightY);
-}*/
-
 
 void ShapeGraph::removeNode(int nodeIndex) {
     ///remove node with index
@@ -159,31 +132,6 @@ void ShapeGraph::removeNode(int nodeIndex) {
 void ShapeGraph::removeNode()   {
     ///remove selected node
     removeNode(selectedIndex);
-}
-
-void ShapeGraph::quantizeNode (int index)    {
-    //if no rectangle is being edited, return, should never happen
-    if(index < 0) return;
-    
-    ShapeNode& node = *nodes[index];
-    float nodeX = node.rect.getX();
-    
-    auto closestStep = std::min_element(widthQuantizationSteps.begin(), widthQuantizationSteps.end(), [nodeX](float a, float b) {
-        return std::abs(nodeX - a) < std::abs(nodeX - b);
-    });
-    
-    if(closestStep != widthQuantizationSteps.end()) {
-        node.rect.setX(*closestStep);
-    }
-    
-    //update edges
-    //updateEdgesAroundNode(index);
-    updateEdge(index);
-    updateEdge(index-1);
-}
-
-void ShapeGraph::quantizeNode() {
-    quantizeNode(selectedIndex);
 }
 
 ///method to create edges between all nodes, should only be called at the beginning
@@ -224,8 +172,6 @@ void ShapeGraph::moveEdge(int index, juce::Point<float> position) {
     edge.xDeviation = x - calcEdgeMidX(from);
     edge.yDeviation = y - calcEdgeMidY(from);
     edge.rect.setPosition(x, y);
-    //print deviations for edge
-    //std::cout << "Edge xDeviation: " << edge.xDeviation << " yDeviation: " << edge.yDeviation << std::endl;
 }
 
 void ShapeGraph::moveEdge(juce::Point<float> position) {
@@ -283,12 +229,35 @@ std::pair<int, juce::Rectangle<float>*> ShapeGraph::containsPointOnEdge(juce::Po
     return {-1, nullptr};
 }
 
+void ShapeGraph::quantizeNode (int index)    {
+    //if no rectangle is being edited, return, should never happen
+    if(index < 0) return;
+    
+    ShapeNode& node = *nodes[index];
+    float nodeX = node.rect.getX();
+    
+    auto closestStep = std::min_element(widthQuantizationSteps.begin(), widthQuantizationSteps.end(), [nodeX](float a, float b) {
+        return std::abs(nodeX - a) < std::abs(nodeX - b);
+    });
+    
+    if(closestStep != widthQuantizationSteps.end()) {
+        node.rect.setX(*closestStep-nodeSize/2);
+    }
+    
+    //update edges
+    updateEdge(index);
+    updateEdge(index-1);
+}
+
+void ShapeGraph::quantizeNode() {
+    quantizeNode(selectedIndex);
+}
+
 void ShapeGraph::resizeNodeLayout()  {
     ///called when window size changes
     ///update the position of the corner nodes, later on the other nodes will be updated, priority very low
-    nodes[0]->rect.setPosition(leftBound, bottomBound-nodeSize);
-    nodes[nodes.size()-1]->rect.setPosition(rightBound-nodeSize, topBound);
-    //makeEdgesFromScratch();
+    nodes[0]->rect.setPosition(leftBound-nodeSize/2, bottomBound-nodeSize);
+    nodes[nodes.size()-1]->rect.setPosition(rightBound-nodeSize/2, topBound);
     //recreate all edges
     for (int i = 0; i < nodes.size()-1; ++i) {
         addEdge(i);
@@ -299,7 +268,33 @@ void ShapeGraph::resizeNodeLayout()  {
     
     //create quantization steps
     for(int i = 0; i <= quantizeDepth; ++i) {
-        widthQuantizationSteps.add((i * width)/quantizeDepth);
+        widthQuantizationSteps.add(leftBound + (i * width)/quantizeDepth);
+    }
+}
+
+void ShapeGraph::paint(juce::Graphics& g)   {
+    ///Iterate through all nodes and edges and draw them
+    g.setColour (juce::Colours::orange);
+    for (int i = 0; i < nodes.size(); i++) {
+        g.fillRect(nodes[i]->rect);
+    }
+    //draw lines between rectangles and add curve point
+    path.clear();
+    for(int i = 0; i < edges.size(); ++i) {
+        //draw edges
+        path.startNewSubPath(nodes[edges[i]->from]->rect.getCentre().toFloat());
+        path.quadraticTo(edges[i]->rect.getCentre().toFloat(), nodes[edges[i]->to]->rect.getCentre().toFloat());
+        g.strokePath(path, juce::PathStrokeType(2.0f));
+        g.drawEllipse(edges[i]->rect.toFloat(), 2.0f);
+    }
+    
+    //draw lines for quantization steps
+    g.setColour(juce::Colours::orange.withAlpha(0.5f));
+    for(auto step : widthQuantizationSteps) {
+        path.clear();
+        path.startNewSubPath(step, topBound);
+        path.lineTo(step, bottomBound);
+        g.strokePath(path, juce::PathStrokeType(1.0f));
     }
 }
 
@@ -374,23 +369,6 @@ void ShapeGraph::setBottomBound(int bottom)  {
 
 int ShapeGraph::getBottomBound() const {
     return bottomBound;
-}
-
-void ShapeGraph::paint(juce::Graphics& g)   {
-    ///Iterate through all nodes and edges and draw them
-    g.setColour (juce::Colours::orange);
-    for (int i = 0; i < nodes.size(); i++) {
-        g.fillRect(nodes[i]->rect);
-    }
-    //draw lines between rectangles and add curve point
-    path.clear();
-    for(int i = 0; i < edges.size(); ++i) {
-        //draw edges
-        path.startNewSubPath(nodes[edges[i]->from]->rect.getCentre().toFloat());
-        path.quadraticTo(edges[i]->rect.getCentre().toFloat(), nodes[edges[i]->to]->rect.getCentre().toFloat());
-        g.strokePath(path, juce::PathStrokeType(2.0f));
-        g.drawEllipse(edges[i]->rect.toFloat(), 2.0f);
-    }
 }
 
 std::unique_ptr<juce::XmlElement> ShapeGraph::createXML() {

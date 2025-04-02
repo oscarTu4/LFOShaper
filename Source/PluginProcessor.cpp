@@ -153,15 +153,12 @@ void RectanglesAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
     
     float lfoPhase = phase;
     float modulatorValue;
-    float noiseGain = 0.25;
     for (int channel = 0; channel < totalNumInputChannels; ++channel)
     {
         auto* channelData = buffer.getWritePointer (channel);
         for (int sample = 0; sample < buffer.getNumSamples(); ++sample) {
             modulatorValue = modulator.getModulationValue(lfoPhase)*depth;
-            //float noise = noiseGain * (2.0f * random.nextFloat() - 1.0f);
             channelData[sample] = channelData[sample] + channelData[sample] * modulatorValue;
-            //channelData[sample] = noise + noise * modulatorValue;
             
             lfoPhase += delta_f;
             if (lfoPhase >= 1.0f) lfoPhase -= 1.0f;
@@ -243,7 +240,11 @@ void RectanglesAudioProcessor::setLfoRate(float rate) {
     lfoRate = rate;
 }
 
-void RectanglesAudioProcessor::updateLfoShape(const ShapeGraph& shapeGraph) {
+float RectanglesAudioProcessor::getPhase()  {
+    return phase;
+}
+
+void RectanglesAudioProcessor::updateLfoData(const ShapeGraph& shapeGraph) {
     modulator.generateModulationValues(&shapeGraph);
 }
 
