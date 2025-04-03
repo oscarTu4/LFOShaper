@@ -16,12 +16,9 @@
 RectanglesAudioProcessor::RectanglesAudioProcessor()
 #ifndef JucePlugin_PreferredChannelConfigurations
 :  AudioProcessor (BusesProperties()
-#if ! JucePlugin_IsMidiEffect
-#if ! JucePlugin_IsSynth
                    .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
-#endif
                    .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
-#endif
+                   .withInput  ("Sidechain",  juce::AudioChannelSet::discreteChannels(2), true)
                    ),
 parameters (*this, nullptr, "PARAMETERS", [] {
     using namespace juce;
@@ -54,29 +51,17 @@ const juce::String RectanglesAudioProcessor::getName() const
 
 bool RectanglesAudioProcessor::acceptsMidi() const
 {
-#if JucePlugin_WantsMidiInput
-    return true;
-#else
     return false;
-#endif
 }
 
 bool RectanglesAudioProcessor::producesMidi() const
 {
-#if JucePlugin_ProducesMidiOutput
-    return true;
-#else
     return false;
-#endif
 }
 
 bool RectanglesAudioProcessor::isMidiEffect() const
 {
-#if JucePlugin_IsMidiEffect
-    return true;
-#else
     return false;
-#endif
 }
 
 double RectanglesAudioProcessor::getTailLengthSeconds() const
@@ -121,21 +106,21 @@ void RectanglesAudioProcessor::releaseResources()
 #ifndef JucePlugin_PreferredChannelConfigurations
 bool RectanglesAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
-#if JucePlugin_IsMidiEffect
-    juce::ignoreUnused (layouts);
-    return true;
-#else
-    if (layouts.getMainOutputChannelSet() != juce::AudioChannelSet::mono()
-        && layouts.getMainOutputChannelSet() != juce::AudioChannelSet::stereo())
+    auto mainInput  = layouts.getMainInputChannelSet();
+    if(mainInput != juce::AudioChannelSet::stereo()
+       && mainInput != juce::AudioChannelSet::mono())
         return false;
     
-#if ! JucePlugin_IsSynth
-    if (layouts.getMainOutputChannelSet() != layouts.getMainInputChannelSet())
-        return false;
-#endif
+    if(layouts.getMainOutputChannelSet() != juce::AudioChannelSet::stereo())
+       return false;
+    
+    if(layouts.getNumChannels(true, 1) > 0) {
+        auto sideIn = layouts.getChannelSet(true, 1);
+        if(sideIn != juce::AudioChannelSet::stereo() && sideIn != juce::AudioChannelSet::mono())
+            return false;
+    }
     
     return true;
-#endif
 }
 #endif
 
