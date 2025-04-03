@@ -44,9 +44,12 @@ private:
     juce::ToggleButton syncButton;
     juce::Slider depthSlider;
     juce::Label depthLabel;
+    juce::Slider scThresholdSlider;
+    juce::Label scThresholdLabel;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> lfoRateSliderAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> syncButtonAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> depthSliderAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> scThresholdSliderAttachment;
     
     std::vector<float> rhythmValues { 0.125f, 0.16667f, 0.25f, 0.333f, 0.5f, 0.667f, 1.0f, 1.5f, 2.0f, 3.0f, 4.0f, 6.0f, 8.0f, 12.0f, 16.0f };
     juce::StringArray rhythmLabels
@@ -56,6 +59,7 @@ private:
     
     bool lfoChangePending = false;
     bool mouseDragPending = false;
+    bool sideChainActive = false;
     
     void noiseButtonClicked();
     void lfoRateSliderValueChanged();

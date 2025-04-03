@@ -55,10 +55,13 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
     
+    bool hasSideChainInput();
+    
     void updatePositionInfo();
     double getBpm();
     
     void setDepth(float depth);
+    void setSCThreshold(float threshold);
     void setLfoRate(float rate);
     void updateLfoData(const ShapeGraph& shapeGraph);
     float getPhase();
@@ -76,10 +79,14 @@ private:
     juce::Random random;
     std::vector<std::pair<float, float>> lfoShape;
     
+    bool sideChainActive = false;
+    
     float sampleRate;
     float lfoRate;
     Modulator modulator;
     float depth = 1.0f;
     float phase = 0;
+    float scThreshold = 0.0f;
+    float lfoTriggered = false;
 
 };

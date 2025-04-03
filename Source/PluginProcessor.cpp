@@ -18,7 +18,7 @@ RectanglesAudioProcessor::RectanglesAudioProcessor()
 :  AudioProcessor (BusesProperties()
                    .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
                    .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
-                   .withInput  ("Sidechain",  juce::AudioChannelSet::discreteChannels(2), true)
+                   .withInput  ("Aux Input", juce::AudioChannelSet::stereo(), true)
                    ),
 parameters (*this, nullptr, "PARAMETERS", [] {
     using namespace juce;
@@ -32,6 +32,8 @@ parameters (*this, nullptr, "PARAMETERS", [] {
     
     layout.add(std::make_unique<AudioParameterFloat>(
                                                      ParameterID{"depth", 1}, "Depth", NormalisableRange<float>(-1.0f, 1.0f), 0.0f));
+    layout.add(std::make_unique<AudioParameterFloat>(
+                                                     ParameterID{"sc threshold", 1}, "SC Threshold", NormalisableRange<float>(0.0, 1.0f), 0.0f));
     
     return layout;
 }())
@@ -126,7 +128,6 @@ bool RectanglesAudioProcessor::isBusesLayoutSupported (const BusesLayout& layout
 
 void RectanglesAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
-    juce::ScopedNoDenormals noDenormals;
     auto totalNumInputChannels  = getTotalNumInputChannels();
     auto totalNumOutputChannels = getTotalNumOutputChannels();
     
@@ -134,23 +135,50 @@ void RectanglesAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
         buffer.clear (i, 0, buffer.getNumSamples());
     
     updatePositionInfo();
-    float delta_f = lfoRate / sampleRate;
     
-    float lfoPhase = phase;
-    float modulatorValue;
-    for (int channel = 0; channel < totalNumInputChannels; ++channel)
+    juce::AudioBuffer<float> scBuffer;
+    if (getBusCount(true) > 1 && getChannelCountOfBus(true, 1) > 0)
     {
-        auto* channelData = buffer.getWritePointer (channel);
-        for (int sample = 0; sample < buffer.getNumSamples(); ++sample) {
-            modulatorValue = modulator.getModulationValue(lfoPhase)*depth;
-            channelData[sample] = channelData[sample] + channelData[sample] * modulatorValue;
-            
-            lfoPhase += delta_f;
-            if (lfoPhase >= 1.0f) lfoPhase -= 1.0f;
+        sideChainActive = true;
+        scBuffer = getBusBuffer(buffer, true, 1);
+        float meanRms = 0;
+        for (int channel = 0; channel < scBuffer.getNumChannels(); ++channel) {
+            meanRms += scBuffer.getRMSLevel(channel, 0, scBuffer.getNumSamples());
+        }
+        meanRms = meanRms / scBuffer.getNumChannels();
+        if(meanRms > scThreshold && !lfoTriggered) {
+            lfoTriggered = true;
+            phase = 0.0f;
         }
     }
-    phase = lfoPhase;
+    else
+    {
+        sideChainActive = false;
+    }
+
+    if (lfoTriggered || !sideChainActive) {
+        float delta_f = lfoRate / sampleRate;
+        
+        float lfoPhase = phase;
+        float modulatorValue;
+        for (int channel = 0; channel < totalNumInputChannels; ++channel)
+        {
+            auto* channelData = buffer.getWritePointer (channel);
+            for (int sample = 0; sample < buffer.getNumSamples(); ++sample) {
+                modulatorValue = modulator.getModulationValue(lfoPhase)*depth;
+                channelData[sample] = channelData[sample] + channelData[sample] * modulatorValue;
+                
+                lfoPhase += delta_f;
+                if (lfoPhase >= 1.0f) {
+                    lfoTriggered = false;
+                    break;
+                }
+            }
+        }
+        phase = lfoPhase;
+    }
 }
+
 
 //==============================================================================
 bool RectanglesAudioProcessor::hasEditor() const
@@ -166,7 +194,7 @@ juce::AudioProcessorEditor* RectanglesAudioProcessor::createEditor()
 //==============================================================================
 void RectanglesAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
-    /*auto stateXml = parameters.copyState().createXml();
+    auto stateXml = parameters.copyState().createXml();
     
     if (stateXml != nullptr)
     {
@@ -178,13 +206,13 @@ void RectanglesAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
         }
         
         copyXmlToBinary(*stateXml, destData);
-    }*/
+    }
 }
 
 
 void RectanglesAudioProcessor::setStateInformation(const void* data, int sizeInBytes)
 {
-    /*std::unique_ptr<juce::XmlElement> xmlState(getXmlFromBinary(data, sizeInBytes));
+    std::unique_ptr<juce::XmlElement> xmlState(getXmlFromBinary(data, sizeInBytes));
     
     if (xmlState != nullptr)
     {
@@ -194,7 +222,11 @@ void RectanglesAudioProcessor::setStateInformation(const void* data, int sizeInB
         {
             shapeGraphXmlString = shapeXml->toString();
         }
-    }*/
+    }
+}
+
+bool RectanglesAudioProcessor::hasSideChainInput() {
+    return sideChainActive;
 }
 
 
@@ -219,6 +251,10 @@ double RectanglesAudioProcessor::getBpm() {
 
 void RectanglesAudioProcessor::setDepth(float depth) {
     this->depth = depth;
+}
+
+void RectanglesAudioProcessor::setSCThreshold(float threshold) {
+    scThreshold = threshold;
 }
 
 void RectanglesAudioProcessor::setLfoRate(float rate) {

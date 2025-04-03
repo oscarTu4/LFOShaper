@@ -18,11 +18,14 @@ RectanglesAudioProcessorEditor::RectanglesAudioProcessorEditor (RectanglesAudioP
 {
     addAndMakeVisible(lfoRateSlider);
     addAndMakeVisible(depthSlider);
-    addAndMakeVisible(depthLabel);
+    addAndMakeVisible(scThresholdSlider);
+    addAndMakeVisible(scThresholdLabel);
+    addAndMakeVisible(syncButton);
     
     lfoRateSliderAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(audioProcessor.parameters, "lfoRate", lfoRateSlider);
     syncButtonAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(audioProcessor.parameters, "sync", syncButton);
     depthSliderAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(audioProcessor.parameters, "depth", depthSlider);
+    scThresholdSliderAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(audioProcessor.parameters, "sc threshold", scThresholdSlider);
     
     lfoRateSlider.setSliderStyle(juce::Slider::SliderStyle::RotaryVerticalDrag);
     lfoRateSlider.setRange(0.125, 16.0, 0.01);
@@ -39,7 +42,6 @@ RectanglesAudioProcessorEditor::RectanglesAudioProcessorEditor (RectanglesAudioP
     
     syncButton.setButtonText("Sync");
     syncButton.onClick = [this] { syncButtonClicked(); };
-    addAndMakeVisible(syncButton);
     
     depthSlider.setSliderStyle(juce::Slider::SliderStyle::LinearHorizontal);
     depthSlider.setColour(juce::Slider::thumbColourId, juce::Colours::orange);
@@ -60,7 +62,7 @@ RectanglesAudioProcessorEditor::RectanglesAudioProcessorEditor (RectanglesAudioP
     };
     
     depthLabel.setText("Depth", juce::dontSendNotification);
-    depthLabel.attachToComponent(&depthSlider, true);
+    addAndMakeVisible(depthLabel);
     
     if (!syncButton.getToggleState())
     {
@@ -69,6 +71,27 @@ RectanglesAudioProcessorEditor::RectanglesAudioProcessorEditor (RectanglesAudioP
         };
         lfoRateSlider.updateText();
     }
+    
+    scThresholdSlider.setSliderStyle(juce::Slider::SliderStyle::LinearHorizontal);
+    scThresholdSlider.setSliderStyle(juce::Slider::SliderStyle::LinearHorizontal);
+    scThresholdSlider.setColour(juce::Slider::thumbColourId, juce::Colours::orange);
+    scThresholdSlider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+    scThresholdSlider.setRange(0.0f, 1.0f, 0.01f);
+    scThresholdSlider.setValue(0.0f);
+    scThresholdSlider.setVelocityBasedMode(true);
+    scThresholdSlider.setScrollWheelEnabled(true);
+    scThresholdSlider.setDoubleClickReturnValue(true, 0.0);
+    scThresholdSlider.setVelocityModeParameters(
+        1.0,   // sensitivity (higher = faster value change)
+        0.5,   // threshold from click point (before drag starts affecting value)
+        0.09,  // offset (prevents small accidental changes)
+        true   // user can fine-adjust with a modifier (like Shift)
+    );
+    scThresholdSlider.onValueChange = [this] {
+        audioProcessor.setSCThreshold(scThresholdSlider.getValue());
+    };
+    
+    scThresholdLabel.setText("SC Threshold", juce::dontSendNotification);
 
     setSize (600, 400);
     
@@ -135,7 +158,14 @@ void RectanglesAudioProcessorEditor::resized()
     shapeGraph.resizeNodeLayout();
     lfoRateSlider.setBounds(getWidth()/2, getHeight()-80, 100, 80);
     syncButton.setBounds(lfoRateSlider.getX()+lfoRateSlider.getWidth(), lfoRateSlider.getY(), 80, 80);
+    
     depthSlider.setBounds(lfoRateSlider.getX()-100, getHeight()-80, 100, 80);
+    depthLabel.setBounds(depthSlider.getX(), depthSlider.getBottom(), depthSlider.getWidth(), 20);
+    
+    scThresholdSlider.setBounds(depthSlider.getX()-100, depthSlider.getY(), 100, 80);
+    scThresholdLabel.setBounds(scThresholdSlider.getX(), scThresholdSlider.getBottom(), scThresholdSlider.getWidth(), 20);
+    
+    
     repaint();
     
     audioProcessor.updateLfoData(shapeGraph);
@@ -299,5 +329,14 @@ void RectanglesAudioProcessorEditor::timerCallback() {
     }
     
     //update position of playhead done in repaint
+    sideChainActive = audioProcessor.hasSideChainInput();
+    if(sideChainActive) {
+        scThresholdSlider.setVisible(true);
+        scThresholdLabel.setVisible(true);
+    } else {
+        scThresholdSlider.setVisible(false);
+        scThresholdLabel.setVisible(false);
+    }
+    ///TODO make sliders to do sidechain processing
     repaint();
 }

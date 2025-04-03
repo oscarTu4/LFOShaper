@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<JUCERPROJECT id="Ntye1Z" name="rectangles" projectType="audioplug" useAppConfig="0"
+<JUCERPROJECT id="Ntye1Z" name="LFOTool" projectType="audioplug" useAppConfig="0"
               addUsingNamespaceToJuceHeader="0" jucerFormatVersion="1" pluginFormats="buildAU,buildStandalone,buildVST3"
-              pluginName="LFOShaper">
-  <MAINGROUP id="MFWv6v" name="rectangles">
+              pluginName="LFOTool" version="1.0.1">
+  <MAINGROUP id="MFWv6v" name="LFOTool">
     <GROUP id="{CFC0641E-09D1-FB0B-0033-3559EC78DC7E}" name="Source">
       <FILE id="kWzydO" name="Modulator.cpp" compile="1" resource="0" file="Source/Modulator.cpp"/>
       <FILE id="MFvlHl" name="Modulator.h" compile="0" resource="0" file="Source/Modulator.h"/>
