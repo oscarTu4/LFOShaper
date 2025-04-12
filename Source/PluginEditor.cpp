@@ -14,28 +14,33 @@
 
 //==============================================================================
 RectanglesAudioProcessorEditor::RectanglesAudioProcessorEditor (RectanglesAudioProcessor& p)
-    : AudioProcessorEditor(p), audioProcessor(p)
+: AudioProcessorEditor(p), audioProcessor(p)
 {
     addAndMakeVisible(lfoRateSlider);
     addAndMakeVisible(depthSlider);
     addAndMakeVisible(scThresholdSlider);
     addAndMakeVisible(scThresholdLabel);
     addAndMakeVisible(syncButton);
+    addAndMakeVisible(quantizeButton);
+    addAndMakeVisible(scButton);
+    addAndMakeVisible(scReleaseSlider);
+    addAndMakeVisible(panOffsetSlider);
+    addAndMakeVisible(scWarningLabel);
     
     lfoRateSliderAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(audioProcessor.parameters, "lfoRate", lfoRateSlider);
     syncButtonAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(audioProcessor.parameters, "sync", syncButton);
+    quantizeButtonAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(audioProcessor.parameters, "quantize", quantizeButton);
     depthSliderAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(audioProcessor.parameters, "depth", depthSlider);
     scThresholdSliderAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(audioProcessor.parameters, "sc threshold", scThresholdSlider);
+    scButtonAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(audioProcessor.parameters, "sc", scButton);
+    scReleaseSliderAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(audioProcessor.parameters, "sc release", scReleaseSlider);
+    panOffsetSliderAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(audioProcessor.parameters, "pan offset", panOffsetSlider);
     
     lfoRateSlider.setSliderStyle(juce::Slider::SliderStyle::RotaryVerticalDrag);
-    lfoRateSlider.setRange(0.125, 16.0, 0.01);
     lfoRateSlider.setColour(juce::Slider::rotarySliderFillColourId, juce::Colours::orange);
     lfoRateSlider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 100, 20); // false = no outline
     lfoRateSlider.setColour(juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
-    lfoRateSlider.setHasFocusOutline(true);
-    
     lfoRateSlider.setColour(juce::Slider::thumbColourId, juce::Colours::transparentBlack);
-    lfoRateSlider.setValue(1);
     lfoRateSlider.onValueChange = [this] {
         lfoRateSliderValueChanged();
     };
@@ -43,57 +48,82 @@ RectanglesAudioProcessorEditor::RectanglesAudioProcessorEditor (RectanglesAudioP
     syncButton.setButtonText("Sync");
     syncButton.onClick = [this] { syncButtonClicked(); };
     
+    quantizeButton.setButtonText("Grid Snap");
+    
     depthSlider.setSliderStyle(juce::Slider::SliderStyle::LinearHorizontal);
     depthSlider.setColour(juce::Slider::thumbColourId, juce::Colours::orange);
     depthSlider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
-    depthSlider.setRange(-1.0, 1.0, 0.01);
-    depthSlider.setValue(0);
+    depthSlider.setRange(0.0f, 1.0f, 0.001f);
     depthSlider.setVelocityBasedMode(true);
     depthSlider.setScrollWheelEnabled(true);
-    depthSlider.setDoubleClickReturnValue(true, 0.0);
-    depthSlider.setVelocityModeParameters(
-        1.0,   // sensitivity (higher = faster value change)
-        0.5,   // threshold from click point (before drag starts affecting value)
-        0.09,  // offset (prevents small accidental changes)
-        true   // user can fine-adjust with a modifier (like Shift)
-    );
+    depthSlider.setDoubleClickReturnValue(true, 1.0);
+    //depthSlider.setVelocityModeParameters(1.0, 0.5, 0.09, true);
+    depthSlider.setSkewFactor(0.3f);
     depthSlider.onValueChange = [this] {
         audioProcessor.setDepth(depthSlider.getValue());
     };
     
     depthLabel.setText("Depth", juce::dontSendNotification);
-    addAndMakeVisible(depthLabel);
+    depthLabel.attachToComponent(&depthSlider, true);
     
-    if (!syncButton.getToggleState())
-    {
-        lfoRateSlider.textFromValueFunction = [](double value) {
-            return juce::String(value, 2) + " Hz";
-        };
-        lfoRateSlider.updateText();
-    }
+    panOffsetSlider.setSliderStyle(juce::Slider::SliderStyle::LinearHorizontal);
+    panOffsetSlider.setColour(juce::Slider::thumbColourId, juce::Colours::orange);
+    panOffsetSlider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+    panOffsetSlider.setRange(-0.5f, 0.5f, 0.01f);
+    panOffsetSlider.setVelocityBasedMode(true);
+    panOffsetSlider.setScrollWheelEnabled(true);
+    panOffsetSlider.setDoubleClickReturnValue(true, 0.0);
+    //panOffsetSlider.setVelocityModeParameters(1.0, 0.5, 0.09, true);
+    panOffsetSlider.setSkewFactorFromMidPoint(0.0f);
+    panOffsetSlider.onValueChange = [this] {
+        audioProcessor.setPanOffset(panOffsetSlider.getValue());
+    };
     
-    scThresholdSlider.setSliderStyle(juce::Slider::SliderStyle::LinearHorizontal);
+    panOffsetLabel.setText("Pan Offset", juce::dontSendNotification);
+    panOffsetLabel.attachToComponent(&panOffsetSlider, true);
+    
     scThresholdSlider.setSliderStyle(juce::Slider::SliderStyle::LinearHorizontal);
     scThresholdSlider.setColour(juce::Slider::thumbColourId, juce::Colours::orange);
     scThresholdSlider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
-    scThresholdSlider.setRange(0.0f, 1.0f, 0.01f);
-    scThresholdSlider.setValue(0.0f);
+    scThresholdSlider.setRange(0.0f, 0.5f, 0.001f);
     scThresholdSlider.setVelocityBasedMode(true);
     scThresholdSlider.setScrollWheelEnabled(true);
-    scThresholdSlider.setDoubleClickReturnValue(true, 0.0);
-    scThresholdSlider.setVelocityModeParameters(
-        1.0,   // sensitivity (higher = faster value change)
-        0.5,   // threshold from click point (before drag starts affecting value)
-        0.09,  // offset (prevents small accidental changes)
-        true   // user can fine-adjust with a modifier (like Shift)
-    );
+    scThresholdSlider.setDoubleClickReturnValue(true, 0.2f);
+    scThresholdSlider.setVelocityModeParameters(1.0, 0.5, 0.09, true);
+    scThresholdSlider.setSkewFactor(0.3f);
+    scThresholdSlider.setSliderSnapsToMousePosition(false);
     scThresholdSlider.onValueChange = [this] {
         audioProcessor.setSCThreshold(scThresholdSlider.getValue());
     };
     
-    scThresholdLabel.setText("SC Threshold", juce::dontSendNotification);
+    scThresholdLabel.setText("Threshold", juce::dontSendNotification);
+    scThresholdLabel.attachToComponent(&scThresholdSlider, true);
+    
+    scButton.setButtonText("sc");
+    scButton.onClick = [this] {
+        scButtonClicked();
+    };
+    
+    scReleaseSlider.setSliderStyle(juce::Slider::SliderStyle::LinearHorizontal);
+    scReleaseSlider.setColour(juce::Slider::thumbColourId, juce::Colours::orange);
+    scReleaseSlider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+    scReleaseSlider.setRange(0.01f, 1.0f, 0.01f);
+    scReleaseSlider.setVelocityBasedMode(true);
+    scReleaseSlider.setScrollWheelEnabled(true);
+    scReleaseSlider.setDoubleClickReturnValue(true, 0.2f);
+    scReleaseSlider.setVelocityModeParameters(1.0, 0.5, 0.09, true);
+    scReleaseSlider.setSliderSnapsToMousePosition(false);
+    scReleaseSlider.onValueChange = [this] {
+        audioProcessor.setSCRelease(scReleaseSlider.getValue());
+    };
+    scReleaseLabel.setText("Release", juce::dontSendNotification);
+    scReleaseLabel.attachToComponent(&scReleaseSlider, true);
+    
+    scWarningLabel.setText("no sc input", juce::dontSendNotification);
+    scWarningLabel.setColour(juce::Label::textColourId, juce::Colours::red);
+    scWarningLabel.setVisible(false);
 
-    setSize (600, 400);
+    setSize (600, 500);
     
     shapeGraph.setQuantizeDepth(8);
     shapeGraph.setLeftBound(10);
@@ -114,12 +144,9 @@ RectanglesAudioProcessorEditor::RectanglesAudioProcessorEditor (RectanglesAudioP
     audioProcessor.setLfoRate(lfoRateSlider.getValue());
     audioProcessor.updateLfoData(shapeGraph);
     
-    rhythmValuesHz.clear();
+    scButtonClicked();
+    syncButtonClicked();
     bpm = audioProcessor.getBpm();
-    for (auto beat : rhythmValues)   {
-        rhythmValuesHz.push_back(bpm/(60*beat));
-        std::cout << "beat: " << beat << " Hz: " << bpm/(60*beat) << std::endl;
-    }
     startTimerHz(30);
 }
 
@@ -132,13 +159,13 @@ void RectanglesAudioProcessorEditor::paint (juce::Graphics& g)
 {
     g.fillAll (juce::Colours::black);
     
-    //draw all rectangles
+    //draw shapeGraph
     shapeGraph.paint(g);
     
     //draw playhead
     g.setColour(juce::Colours::grey.withAlpha(0.5f));
     juce::Path path;
-    float xPos = shapeGraph.getLeftBound()+audioProcessor.getPhase()*shapeGraph.getWidth();
+    double xPos = shapeGraph.getLeftBound()+audioProcessor.getPhase()*shapeGraph.getWidth();
     path.startNewSubPath(xPos, shapeGraph.getTopBound());
     path.lineTo(xPos, shapeGraph.getBottomBound());
     g.strokePath(path, juce::PathStrokeType(2.0f));
@@ -147,24 +174,31 @@ void RectanglesAudioProcessorEditor::paint (juce::Graphics& g)
 
 void RectanglesAudioProcessorEditor::resized()
 {
-    //std::cout << "Resized" << std::endl;
+    int xMargin = 10;
+    int yMargin = 10;
     shapeGraph.setHeight(getHeight()-100);
-    shapeGraph.setWidth(getWidth()-20);
-    shapeGraph.setLeftBound(10);
+    shapeGraph.setWidth(getWidth()-xMargin*2);
+    shapeGraph.setLeftBound(xMargin);
     shapeGraph.setRightBound(shapeGraph.getLeftBound()+shapeGraph.getWidth());
-    shapeGraph.setTopBound(10);
+    shapeGraph.setTopBound(yMargin);
     shapeGraph.setBottomBound(shapeGraph.getTopBound()+shapeGraph.getHeight());
     
     shapeGraph.resizeNodeLayout();
-    lfoRateSlider.setBounds(getWidth()/2, getHeight()-80, 100, 80);
-    syncButton.setBounds(lfoRateSlider.getX()+lfoRateSlider.getWidth(), lfoRateSlider.getY(), 80, 80);
     
-    depthSlider.setBounds(lfoRateSlider.getX()-100, getHeight()-80, 100, 80);
-    depthLabel.setBounds(depthSlider.getX(), depthSlider.getBottom(), depthSlider.getWidth(), 20);
+    int itemMargin = 80;
+    int buttonSize = 30;
     
-    scThresholdSlider.setBounds(depthSlider.getX()-100, depthSlider.getY(), 100, 80);
-    scThresholdLabel.setBounds(scThresholdSlider.getX(), scThresholdSlider.getBottom(), scThresholdSlider.getWidth(), 20);
+    syncButton.setBounds(getWidth()-itemMargin-5, getHeight()-itemMargin+5, itemMargin, buttonSize);
+    quantizeButton.setBounds(getWidth()-itemMargin-5, getHeight()-itemMargin+buttonSize+5, itemMargin, buttonSize+5);
     
+    lfoRateSlider.setBounds(syncButton.getX()-itemMargin-5, getHeight()-itemMargin, itemMargin, itemMargin);
+    depthSlider.setBounds(lfoRateSlider.getX()-itemMargin, getHeight()-70, itemMargin, buttonSize);
+    panOffsetSlider.setBounds(lfoRateSlider.getX()-itemMargin, getHeight()-40, itemMargin, buttonSize);
+    
+    scButton.setBounds(xMargin, getHeight()-70, 100, buttonSize);
+    scThresholdSlider.setBounds(scButton.getX()+scButton.getWidth()+itemMargin/2+scThresholdLabel.getWidth(), getHeight()-70, itemMargin, buttonSize);
+    scReleaseSlider.setBounds(scButton.getX()+scButton.getWidth()+itemMargin/2+scReleaseLabel.getWidth(), getHeight()-40, itemMargin, buttonSize);
+    //scWarningLabel.setBounds(scButton.getX(), getHeight()-40, itemMargin, 30);
     
     repaint();
     
@@ -176,7 +210,6 @@ void RectanglesAudioProcessorEditor::mouseDown(const juce::MouseEvent& event)   
     shapeGraph.clearSelection();
     auto [nodeIndex, node] = shapeGraph.containsPointOnNode(event.getPosition().toFloat());
     auto [edgeIndex, edge] = shapeGraph.containsPointOnEdge(event.getPosition().toFloat());
-    bool clickedSomething = false;
     
     if(node) {
         //mouse click is on a node
@@ -186,7 +219,6 @@ void RectanglesAudioProcessorEditor::mouseDown(const juce::MouseEvent& event)   
         //quantize if control key is down
         if(event.mods.isCtrlDown()) {
             shapeGraph.quantizeNode();
-            clickedSomething = true;
         }
     }
     if(edge)    {
@@ -194,10 +226,8 @@ void RectanglesAudioProcessorEditor::mouseDown(const juce::MouseEvent& event)   
         draggedShapeOffset = event.getPosition().toFloat() - edge->getPosition();
         if(event.mods.isCtrlDown()) {
             shapeGraph.resetEdgeCurve(edgeIndex);
-            clickedSomething = true;
         }
     }
-    if(clickedSomething) repaint();
     
 }
 
@@ -207,6 +237,9 @@ void RectanglesAudioProcessorEditor::mouseDrag(const juce::MouseEvent& event)   
     mouseDragPending = false;
     if(shapeGraph.selectionType == ShapeGraph::SelectionType::Node) {
         shapeGraph.moveNode(event.getPosition().toFloat()-draggedShapeOffset);
+        if(quantizeButton.getToggleState()) {
+            shapeGraph.quantizeNode();
+        }
         mouseDragPending = true;
     }
     
@@ -227,116 +260,105 @@ void RectanglesAudioProcessorEditor::mouseDoubleClick(const juce::MouseEvent& ev
     }
     else    {
         shapeGraph.addNode(event.getPosition().toFloat(), false);
+        //quantize newly created node
+        if(quantizeButton.getToggleState()) {
+            shapeGraph.quantizeNode();
+        }
         std::cout << "Added node" << std::endl;
     }
     audioProcessor.updateLfoData(shapeGraph);
-    repaint();
+    //repaint();
 }
 
 void RectanglesAudioProcessorEditor::mouseUp(const juce::MouseEvent& event) {
-    //repaint();
     shapeGraph.clearSelection();
 }
 
 void RectanglesAudioProcessorEditor::lfoRateSliderValueChanged() {
-    if(syncButton.getToggleState()) {
-        float freq = lfoRateSlider.getValue();
-        // Snap to nearest rhythm value
-        auto it = std::min_element(rhythmValuesHz.begin(), rhythmValuesHz.end(),
-                                   [=](float a, float b) {
-            return std::abs(a - freq) < std::abs(b -  freq);
-        });
-        
-        if (it != rhythmValuesHz.end())
-            lfoRateSlider.setValue(*it, juce::dontSendNotification);
-        else std::cout << "No match found" << std::endl;
+    if (syncButton.getToggleState()) {
+        int index = (int) lfoRateSlider.getValue();
+        float value = rhythmValues[index];
+        audioProcessor.setLfoRate(value);
+        *audioProcessor.parameters.getRawParameterValue("lfoRate") = value; // <-- this ensures persistence
+        lastSyncedValue = index;
     }
-    audioProcessor.setLfoRate(lfoRateSlider.getValue());
-    std::cout << "lfoRateSliderValueChanged lfoRateSlider value: " << lfoRateSlider.getValue() << std::endl;
+    else    {
+        audioProcessor.setLfoRate(lfoRateSlider.getValue());
+        lastFreeValue = lfoRateSlider.getValue();
+    }
 }
 
-void RectanglesAudioProcessorEditor::syncButtonClicked() {
-    bpm = audioProcessor.getBpm();
-    if (syncButton.getToggleState()) {
-        auto [minHzIt, maxHzIt] = std::minmax_element(rhythmValuesHz.begin(), rhythmValuesHz.end());
-        std::cout << "minHz: " << *minHzIt << " maxHz: " << *maxHzIt << std::endl;
-        lfoRateSlider.setRange(*minHzIt, *maxHzIt, 0.01f);
-        
-        //float freq = juce::jlimit<float>(*minHzIt, *maxHzIt, lfoRateSlider.getValue());
-        float freq = lfoRateSlider.getValue();
-        // Snap to nearest rhythm value
-        auto it = std::min_element(rhythmValuesHz.begin(), rhythmValuesHz.end(),
-                                   [=](float a, float b) {
-            return std::abs(a - freq) < std::abs(b -  freq);
-        });
-        
-        if (it != rhythmValuesHz.end()) {
-            lfoRateSlider.setValue(*it, juce::dontSendNotification);
-        } else std::cout << "No match found" << std::endl;
-        audioProcessor.setLfoRate(lfoRateSlider.getValue());
-        
-        // Set text to rhythm labels like "1/4"
-        lfoRateSlider.textFromValueFunction = [this](float value) -> juce::String {
-            float note = bpm / (60.0f * value);
-
-            auto it = std::min_element(rhythmValues.begin(), rhythmValues.end(),
-                                       [=](float a, float b) {
-                return std::abs(a - note) < std::abs(b - note);
-            });
-
-            if (it != rhythmValues.end())
-            {
-                auto index = std::distance(rhythmValues.begin(), it);
-                return rhythmLabels[(int)index] + " Bars";
-            }
-
-            return juce::String(note, 2) + " Bars"; // fallback
-        };
-
-
+void RectanglesAudioProcessorEditor::syncButtonClicked()    {
+    if(syncButton.getToggleState())    {
+        enableSyncMode();
     }
-    else {
-        audioProcessor.setLfoRate(juce::jlimit<float>(0.125, 16.0, lfoRateSlider.getValue()));
-        lfoRateSlider.setRange(0.125, 16.0, 0.01);
-        
-        lfoRateSlider.textFromValueFunction = [](double value) {
-            return juce::String(value, 2) + " Hz";
-        };
-    }
+    else enableFreeMode();
     lfoRateSlider.updateText();
-    std::cout << "syncButtonClicked lfoRateSlider value: " << lfoRateSlider.getValue() << std::endl;
+}
+
+void RectanglesAudioProcessorEditor::enableFreeMode()
+{
+    lfoRateSlider.setRange(0.01, 20.0, 0.01);
+    lfoRateSlider.setSkewFactorFromMidPoint(4.0f);
+    audioProcessor.setLfoRate(lfoRateSlider.getValue());
+    if(lastFreeValue > 0.0f)  {
+        lfoRateSlider.setValue(lastFreeValue);
+    }
+
+    lfoRateSlider.textFromValueFunction = [](double value)
+    {
+        return juce::String(value, 2) + " Hz";
+    };
+
+    
+    lfoRateSlider.valueFromTextFunction = nullptr;
+}
+
+void RectanglesAudioProcessorEditor::enableSyncMode()   {
+    lfoRateSlider.setRange(0, rhythmValues.size() - 1, 1.0);
+    lfoRateSlider.setSkewFactorFromMidPoint(rhythmValues.size() / 2.0f);
+    if(lastSyncedValue > 0.0f)  {
+        lfoRateSlider.setValue(lastSyncedValue);
+    }
+    lfoRateSlider.textFromValueFunction = [this](double index)
+    {
+        int i = juce::jlimit(0, (int)rhythmLabels.size() - 1, (int)index);
+        return rhythmLabels[i];
+    };
+
+    lfoRateSlider.valueFromTextFunction = [this](const juce::String& text)
+    {
+        return rhythmLabels.indexOf(text);
+    };
+    audioProcessor.setLfoRate(rhythmValues[(int) lfoRateSlider.getValue()]);
+    *audioProcessor.parameters.getRawParameterValue("lfoRate") = rhythmValues[(int) lfoRateSlider.getValue()];
+}
+
+
+
+void RectanglesAudioProcessorEditor::scButtonClicked() {
+    bool scActivated = scButton.getToggleState();
+    scThresholdSlider.setVisible(scActivated);
+    scReleaseSlider.setVisible(scActivated);
+    /*if(scActivated) {
+        scWarningLabel.setVisible(audioProcessor.showWarningLabel);
+    }*/
+    audioProcessor.setScActivated(scActivated);
 }
 
 
 void RectanglesAudioProcessorEditor::timerCallback() {
     if(mouseDragPending) {
-        //repaint();
         audioProcessor.updateLfoData(shapeGraph);
         mouseDragPending = false;
     }
     if (auto xml = shapeGraph.createXML())
         audioProcessor.setShapeGraphXmlString(xml->toString());
     
-    // check if bpm has changed
-    float newBpm = audioProcessor.getBpm();
-    if(newBpm != bpm)    {
-        rhythmValuesHz.clear();
-        bpm = audioProcessor.getBpm();
-        for (auto beat : rhythmValues)   {
-            rhythmValuesHz.push_back(bpm/(60*beat));
-            std::cout << "beat: " << beat << " Hz: " << bpm/(60*beat) << std::endl;
-        }
-    }
+    bpm = audioProcessor.getBpm();
     
-    //update position of playhead done in repaint
-    sideChainActive = audioProcessor.hasSideChainInput();
-    if(sideChainActive) {
-        scThresholdSlider.setVisible(true);
-        scThresholdLabel.setVisible(true);
-    } else {
-        scThresholdSlider.setVisible(false);
-        scThresholdLabel.setVisible(false);
+    if(scButton.getToggleState()) {
+        scWarningLabel.setVisible(audioProcessor.showWarningLabel);
     }
-    ///TODO make sliders to do sidechain processing
     repaint();
 }

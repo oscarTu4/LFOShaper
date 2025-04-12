@@ -61,32 +61,46 @@ public:
     double getBpm();
     
     void setDepth(float depth);
+    void setPanOffset(float offset);
     void setSCThreshold(float threshold);
+    void setSCRelease(float release);
     void setLfoRate(float rate);
     void updateLfoData(const ShapeGraph& shapeGraph);
-    float getPhase();
+    double getPhase();
+    void setScActivated(bool activated);
     
     void setShapeGraphXmlString(const juce::String& xmlString);
     
     juce::AudioPlayHead::PositionInfo positionInfo;
     juce::AudioProcessorValueTreeState parameters;
     juce::String shapeGraphXmlString;
+    
+    bool showWarningLabel;
 
 private:
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (RectanglesAudioProcessor)
+    void processSample(int sample, juce::AudioBuffer<float>& buffer);
     
     juce::Random random;
     std::vector<std::pair<float, float>> lfoShape;
     
-    bool sideChainActive = false;
+    float scThreshold = 0.0f;
+    float scRelease = 0.01f;
+    double curScRelease = scRelease;
+    float lfoTriggered = false;
+    bool scActivated;
+    float previousRms = 0.0f;
+    std::vector<float> lfoSmoothed;
+    std::vector<float> scSmoothed;
     
     float sampleRate;
     float lfoRate;
     Modulator modulator;
     float depth = 1.0f;
-    float phase = 0;
-    float scThreshold = 0.0f;
-    float lfoTriggered = false;
+    float panOffset = 0.0f;
+    double phase = 0.0;
+    float smoothing = 0.005f;
+    float maxRelease = 8.0f;
 
 };

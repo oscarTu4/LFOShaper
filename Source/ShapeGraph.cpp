@@ -32,6 +32,7 @@ void ShapeGraph::addNode(juce::Point<float> position, bool isCornerNode) {
     nodes.add(newNode);
     if(!isCornerNode) {
         nodes.sort(comparator);
+        selectedIndex = nodes.indexOf(newNode);
         
         ///update the edges
         int nodeIndex = nodes.indexOf(newNode);
