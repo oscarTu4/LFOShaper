@@ -23,9 +23,9 @@ RectanglesAudioProcessorEditor::RectanglesAudioProcessorEditor (RectanglesAudioP
     addAndMakeVisible(syncButton);
     addAndMakeVisible(quantizeButton);
     addAndMakeVisible(scButton);
-    addAndMakeVisible(scReleaseSlider);
+    //addAndMakeVisible(scReleaseSlider);
     addAndMakeVisible(panOffsetSlider);
-    addAndMakeVisible(scWarningLabel);
+    //addAndMakeVisible(scWarningLabel);
     
     lfoRateSliderAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(audioProcessor.parameters, "lfoRate", lfoRateSlider);
     syncButtonAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(audioProcessor.parameters, "sync", syncButton);
@@ -33,7 +33,7 @@ RectanglesAudioProcessorEditor::RectanglesAudioProcessorEditor (RectanglesAudioP
     depthSliderAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(audioProcessor.parameters, "depth", depthSlider);
     scThresholdSliderAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(audioProcessor.parameters, "sc threshold", scThresholdSlider);
     scButtonAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(audioProcessor.parameters, "sc", scButton);
-    scReleaseSliderAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(audioProcessor.parameters, "sc release", scReleaseSlider);
+    //scReleaseSliderAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(audioProcessor.parameters, "sc release", scReleaseSlider);
     panOffsetSliderAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(audioProcessor.parameters, "pan offset", panOffsetSlider);
     
     lfoRateSlider.setSliderStyle(juce::Slider::SliderStyle::RotaryVerticalDrag);
@@ -57,8 +57,8 @@ RectanglesAudioProcessorEditor::RectanglesAudioProcessorEditor (RectanglesAudioP
     depthSlider.setVelocityBasedMode(true);
     depthSlider.setScrollWheelEnabled(true);
     depthSlider.setDoubleClickReturnValue(true, 1.0);
-    //depthSlider.setVelocityModeParameters(1.0, 0.5, 0.09, true);
-    depthSlider.setSkewFactor(0.3f);
+    depthSlider.setVelocityModeParameters(1.0, 0.5, 0.1, true); // lower sensitivity
+    //depthSlider.setSkewFactor(0.3f);
     depthSlider.onValueChange = [this] {
         audioProcessor.setDepth(depthSlider.getValue());
     };
@@ -73,8 +73,8 @@ RectanglesAudioProcessorEditor::RectanglesAudioProcessorEditor (RectanglesAudioP
     panOffsetSlider.setVelocityBasedMode(true);
     panOffsetSlider.setScrollWheelEnabled(true);
     panOffsetSlider.setDoubleClickReturnValue(true, 0.0);
-    //panOffsetSlider.setVelocityModeParameters(1.0, 0.5, 0.09, true);
-    panOffsetSlider.setSkewFactorFromMidPoint(0.0f);
+    panOffsetSlider.setVelocityModeParameters(1.0, 0.5, 0.1, true); // lower sensitivity
+    //panOffsetSlider.setSkewFactorFromMidPoint(0.0f);
     panOffsetSlider.onValueChange = [this] {
         audioProcessor.setPanOffset(panOffsetSlider.getValue());
     };
@@ -104,7 +104,7 @@ RectanglesAudioProcessorEditor::RectanglesAudioProcessorEditor (RectanglesAudioP
         scButtonClicked();
     };
     
-    scReleaseSlider.setSliderStyle(juce::Slider::SliderStyle::LinearHorizontal);
+    /*scReleaseSlider.setSliderStyle(juce::Slider::SliderStyle::LinearHorizontal);
     scReleaseSlider.setColour(juce::Slider::thumbColourId, juce::Colours::orange);
     scReleaseSlider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
     scReleaseSlider.setRange(0.01f, 1.0f, 0.01f);
@@ -117,11 +117,11 @@ RectanglesAudioProcessorEditor::RectanglesAudioProcessorEditor (RectanglesAudioP
         audioProcessor.setSCRelease(scReleaseSlider.getValue());
     };
     scReleaseLabel.setText("Release", juce::dontSendNotification);
-    scReleaseLabel.attachToComponent(&scReleaseSlider, true);
+    scReleaseLabel.attachToComponent(&scReleaseSlider, true);*/
     
-    scWarningLabel.setText("no sc input", juce::dontSendNotification);
+    /*scWarningLabel.setText("no sc input", juce::dontSendNotification);
     scWarningLabel.setColour(juce::Label::textColourId, juce::Colours::red);
-    scWarningLabel.setVisible(false);
+    scWarningLabel.setVisible(false);*/
 
     setSize (600, 500);
     
@@ -197,7 +197,7 @@ void RectanglesAudioProcessorEditor::resized()
     
     scButton.setBounds(xMargin, getHeight()-70, 100, buttonSize);
     scThresholdSlider.setBounds(scButton.getX()+scButton.getWidth()+itemMargin/2+scThresholdLabel.getWidth(), getHeight()-70, itemMargin, buttonSize);
-    scReleaseSlider.setBounds(scButton.getX()+scButton.getWidth()+itemMargin/2+scReleaseLabel.getWidth(), getHeight()-40, itemMargin, buttonSize);
+    //scReleaseSlider.setBounds(scButton.getX()+scButton.getWidth()+itemMargin/2+scReleaseLabel.getWidth(), getHeight()-40, itemMargin, buttonSize);
     //scWarningLabel.setBounds(scButton.getX(), getHeight()-40, itemMargin, 30);
     
     repaint();
@@ -339,7 +339,7 @@ void RectanglesAudioProcessorEditor::enableSyncMode()   {
 void RectanglesAudioProcessorEditor::scButtonClicked() {
     bool scActivated = scButton.getToggleState();
     scThresholdSlider.setVisible(scActivated);
-    scReleaseSlider.setVisible(scActivated);
+    //scReleaseSlider.setVisible(scActivated);
     /*if(scActivated) {
         scWarningLabel.setVisible(audioProcessor.showWarningLabel);
     }*/
@@ -357,8 +357,8 @@ void RectanglesAudioProcessorEditor::timerCallback() {
     
     bpm = audioProcessor.getBpm();
     
-    if(scButton.getToggleState()) {
+    /*if(scButton.getToggleState()) {
         scWarningLabel.setVisible(audioProcessor.showWarningLabel);
-    }
+    }*/
     repaint();
 }

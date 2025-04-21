@@ -50,9 +50,9 @@ private:
     juce::Slider scThresholdSlider;
     juce::Label scThresholdLabel;
     juce::ToggleButton scButton;
-    juce::Slider scReleaseSlider;
-    juce::Label scReleaseLabel;
-    juce::Label scWarningLabel;
+    //juce::Slider scReleaseSlider;
+    //juce::Label scReleaseLabel;
+    //juce::Label scWarningLabel;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> lfoRateSliderAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> syncButtonAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> depthSliderAttachment;

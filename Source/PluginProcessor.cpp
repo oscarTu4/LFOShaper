@@ -33,9 +33,9 @@ parameters (*this, nullptr, "PARAMETERS", [] {
                                                     ParameterID{"quantize", 1}, "Quantize", false));
     
     layout.add(std::make_unique<AudioParameterFloat>(
-                                                     ParameterID{"depth", 1}, "Depth", NormalisableRange<float>(0.0f, 1.0f), 0.5f));
-    layout.add(std::make_unique<AudioParameterBool>(
-                                                     ParameterID{"pan offset", 1}, "Pan Offset", false));
+                                                     ParameterID{"depth", 1}, "Depth", NormalisableRange<float>(0.0f, 1.0f), 1.0f));
+    layout.add(std::make_unique<AudioParameterFloat>(
+                                                     ParameterID{"pan offset", 1}, "Pan Offset", NormalisableRange<float>(-1.0f, 1.0f), 0.0f));
     layout.add(std::make_unique<AudioParameterFloat>(
                                                      ParameterID{"sc threshold", 1}, "SC Threshold", NormalisableRange<float>(0.0f, 0.5f), 0.2f));
     layout.add(std::make_unique<AudioParameterFloat>(
@@ -231,16 +231,16 @@ void RectanglesAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
 void RectanglesAudioProcessor::processSample(int sample, juce::AudioBuffer<float>& buffer) {
     
     float rawMod;
-    const float effectiveDepth = depth * (curScRelease / scRelease);
+    //const float effectiveDepth = depth * (curScRelease / scRelease);
     for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
     {
         auto* channelData = buffer.getWritePointer(channel);
         if(channel % 2 == 0)    {
-            rawMod = modulator.getModulationValue(phase) * effectiveDepth;
+            rawMod = modulator.getModulationValue(phase) * depth;
         }
         else    {
             float wrappedPhase = std::fmod(std::fmod(phase+panOffset, 1.0f) + 1.0f, 1.0f);
-            rawMod = modulator.getModulationValue(wrappedPhase) * effectiveDepth;
+            rawMod = modulator.getModulationValue(wrappedPhase) * depth;
         }
         float& smoothed = lfoSmoothed[channel];
         smoothed += smoothing * (rawMod - smoothed);
